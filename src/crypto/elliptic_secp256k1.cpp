@@ -311,7 +311,7 @@ namespace fc {
             FC_ASSERT(secp256k1_ec_pubkey_parse(detail::_get_context(), &pubkey, (const unsigned char*)P.begin(), P.size()));
 
             private_key_secret prod = a;
-            FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)c.data()));
+            FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)c.data()));
             invert(prod, prod);
 
             FC_ASSERT(secp256k1_ec_pubkey_tweak_mul(detail::_get_context(), &pubkey, (const unsigned char*)prod.data()));
@@ -320,12 +320,12 @@ namespace fc {
             FC_ASSERT(secp256k1_ec_pubkey_serialize(detail::_get_context(), (unsigned char*)P.begin(), &pk_len, &pubkey, SECP256K1_EC_COMPRESSED));
             return public_key(P);
         }
-    static public_key compute_t(const private_key_secret& a, const private_key_secret& b, const private_key_secret& c, 
+    static public_key compute_t(const private_key_secret& a, const private_key_secret& b, const private_key_secret& c,
                                 const private_key_secret& d, const public_key_data& p, const public_key_data& q)
     {
       private_key_secret prod;
       invert(c, prod); // prod == c^-1
-      FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)d.data()));
+      FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)d.data()));
       // prod == c^-1 * d
 
       public_key_data accu = p;
@@ -352,7 +352,7 @@ namespace fc {
       public_key_data k = compute_k(a, c, p).serialize();
       memcpy(prod.data(), k.begin() + 1, prod.data_size());
       // prod == Kx
-      FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)a.data()));
+      FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char*)prod.data(), (unsigned char*)a.data()));
       // prod == Kx * a
       invert(prod, prod);
       // prod == (Kx * a)^-1
@@ -375,7 +375,7 @@ namespace fc {
         extended_private_key extended_private_key::private_derive_rest(const fc::sha512 &hash, int i) const {
             fc::sha256 left = detail::_left(hash);
             FC_ASSERT(left < detail::get_curve_order());
-            FC_ASSERT(secp256k1_ec_privkey_tweak_add(detail::_get_context(), (unsigned char *) left.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_add(detail::_get_context(), (unsigned char *) left.data(),
                                                      (unsigned char *) get_secret().data()) > 0);
             extended_private_key result(private_key::regenerate(left), detail::_right(hash), i, fingerprint(),
                                         depth + 1);
@@ -401,9 +401,9 @@ namespace fc {
         blinded_hash extended_private_key::blind_hash(const fc::sha256 &hash, int i) const {
             private_key_secret a = generate_a(i).get_secret();
             private_key_secret b = generate_b(i).get_secret();
-            FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char *) a.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char *) a.data(),
                                                      (unsigned char *) hash.data()) > 0);
-            FC_ASSERT(secp256k1_ec_privkey_tweak_add(detail::_get_context(), (unsigned char *) a.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_add(detail::_get_context(), (unsigned char *) a.data(),
                                                      (unsigned char *) b.data()) > 0);
             //        printf("hash: "); print(hash); printf("\n");
             //        printf("blinded: "); print(a); printf("\n");
@@ -419,7 +419,7 @@ namespace fc {
 
         private_key_secret extended_private_key::compute_q(int i, const private_key_secret &p) const {
             private_key_secret q = derive_normal_child(2 * i + 1).get_secret();
-            FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char *) q.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char *) q.data(),
                                                      (unsigned char *) p.data()));
             //        printf("q: "); print(q); printf("\n");
             return q;
@@ -428,9 +428,9 @@ namespace fc {
         blind_signature extended_private_key::blind_sign(const blinded_hash &hash, int i) const {
             private_key_secret p = compute_p(i);
             private_key_secret q = compute_q(i, p);
-            FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char *) p.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char *) p.data(),
                                                      (unsigned char *) hash.data()));
-            FC_ASSERT(secp256k1_ec_privkey_tweak_add(detail::_get_context(), (unsigned char *) p.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_add(detail::_get_context(), (unsigned char *) p.data(),
                                                      (unsigned char *) q.data()));
             //        printf("blind_sig: "); print(p); printf("\n");
             return p;
@@ -448,9 +448,9 @@ namespace fc {
             public_key_data k = compute_k(a, c, p);
             public_key_data t = compute_t(a, b, c, d, p, q).serialize();
 
-            FC_ASSERT(secp256k1_ec_privkey_tweak_mul(detail::_get_context(), (unsigned char *) c.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_mul(detail::_get_context(), (unsigned char *) c.data(),
                                                      (unsigned char *) sig.data()));
-            FC_ASSERT(secp256k1_ec_privkey_tweak_add(detail::_get_context(), (unsigned char *) c.data(),
+            FC_ASSERT(secp256k1_ec_seckey_tweak_add(detail::_get_context(), (unsigned char *) c.data(),
                                                      (unsigned char *) d.data()));
 
             compact_signature result;
@@ -529,11 +529,11 @@ namespace fc {
         {
             secp256k1_pedersen_commitment commitment;
             FC_ASSERT(secp256k1_pedersen_commitment_parse(detail::_get_context(), &commitment, (const unsigned char *)commit.begin()));
-            return secp256k1_rangeproof_verify(detail::_get_context(), &min_val, &max_val, &commitment, (const unsigned char*)proof.data(), proof.size(), 
+            return secp256k1_rangeproof_verify(detail::_get_context(), &min_val, &max_val, &commitment, (const unsigned char*)proof.data(), proof.size(),
                 NULL, 0, secp256k1_generator_h);
         }
 
-        std::vector<char> range_proof_sign(uint64_t min_value, const commitment_type& commit, const blind_factor_type& commit_blind, 
+        std::vector<char> range_proof_sign(uint64_t min_value, const commitment_type& commit, const blind_factor_type& commit_blind,
             const blind_factor_type& nonce, int8_t base10_exp, uint8_t min_bits, uint64_t actual_value)
         {
             size_t proof_len = 5134;
@@ -548,7 +548,7 @@ namespace fc {
             return proof;
         }
 
-        bool verify_range_proof_rewind(blind_factor_type& blind_out, uint64_t& value_out, std::string& message_out, const blind_factor_type& nonce, 
+        bool verify_range_proof_rewind(blind_factor_type& blind_out, uint64_t& value_out, std::string& message_out, const blind_factor_type& nonce,
                                uint64_t& min_val, uint64_t& max_val, commitment_type commit, const std::vector<char>& proof)
         {
             char msg[4096];
