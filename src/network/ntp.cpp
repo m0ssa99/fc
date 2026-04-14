@@ -109,7 +109,6 @@ namespace fc
       void request_time_task()
       {
         assert(_ntp_thread.is_current());
-
         // Check if NTP hasn't been updated for too long
         if (_last_ntp_delta_initialized) {
           auto time_since_last_update = fc::time_point::now() - _last_valid_ntp_reply_received_time;
@@ -117,7 +116,6 @@ namespace fc
             wlog("NTP has not been updated for ${sec} seconds", ("sec", time_since_last_update.count() / 1000000));
           }
         }
-
         if (_last_valid_ntp_reply_received_time <= fc::time_point::now() - fc::seconds(_request_interval_sec - 5))
           request_now();
         if (!_request_time_task_done.valid() || !_request_time_task_done.canceled())
@@ -182,7 +180,6 @@ namespace fc
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
                   int64_t new_delta = offset.count();
-
                   // Track significant delta changes
                   static int64_t previous_delta = 0;
                   if (_last_ntp_delta_initialized) {
@@ -193,7 +190,6 @@ namespace fc
                     }
                   }
                   previous_delta = new_delta;
-
                   _last_ntp_delta_microseconds = new_delta;
                   _last_ntp_delta_initialized = true;
                   fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
