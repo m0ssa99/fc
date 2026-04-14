@@ -34,12 +34,14 @@ namespace fc
 
       ntp_impl() :
       _ntp_thread("ntp"),
-      _request_interval_sec( 60*60 /* 1 hr */),
+      _request_interval_sec( 15*60 /* 15 min */),
       _retry_failed_request_interval_sec(60 * 5),
       _last_ntp_delta_microseconds(0)
       { 
         _last_ntp_delta_initialized = false;
-        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org",123 ) );
+        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.google.com", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.cloudflare.com", 123 ) );
       } 
 
       ~ntp_impl() 
@@ -107,6 +109,15 @@ namespace fc
       void request_time_task()
       {
         assert(_ntp_thread.is_current());
+        
+        // Check if NTP hasn't been updated for too long
+        if (_last_ntp_delta_initialized) {
+          auto time_since_last_update = fc::time_point::now() - _last_valid_ntp_reply_received_time;
+          if (time_since_last_update > fc::seconds(_request_interval_sec * 2)) {
+            wlog("NTP has not been updated for ${sec} seconds", ("sec", time_since_last_update.count() / 1000000));
+          }
+        }
+        
         if (_last_valid_ntp_reply_received_time <= fc::time_point::now() - fc::seconds(_request_interval_sec - 5))
           request_now();
         if (!_request_time_task_done.valid() || !_request_time_task_done.canceled())
@@ -160,8 +171,8 @@ namespace fc
               //     ("origin_time", origin_time)("server_receive_time", server_receive_time)("server_transmit_time", server_transmit_time)("receive_time", receive_time));
               // wlog("ntp offset: ${offset}, round_trip_delay ${delay}", ("offset", offset)("delay", round_trip_delay));
 
-              //if the reply we just received has occurred more than a second after our last time request (it was more than a second ago since our last request)
-              if( round_trip_delay > fc::microseconds(300000) )
+              //if the reply we just received has occurred more than 150ms after our last time request
+              if( round_trip_delay > fc::microseconds(150000) )
               {
                 wlog("received stale ntp reply requested at ${request_time}, send a new time request", ("request_time", origin_time));
                 request_now(); //request another reply and ignore this one
@@ -170,7 +181,20 @@ namespace fc
               {
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
-                  _last_ntp_delta_microseconds = offset.count();
+                  int64_t new_delta = offset.count();
+                  
+                  // Track significant delta changes
+                  static int64_t previous_delta = 0;
+                  if (_last_ntp_delta_initialized) {
+                    int64_t delta_change = std::abs(new_delta - previous_delta);
+                    if (delta_change > 100000) {  // 100ms threshold
+                      wlog("NTP delta changed significantly: ${change} us (from ${old} to ${new})", 
+                           ("change", delta_change)("old", previous_delta)("new", new_delta));
+                    }
+                  }
+                  previous_delta = new_delta;
+                  
+                  _last_ntp_delta_microseconds = new_delta;
                   _last_ntp_delta_initialized = true;
                   fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
                   _last_valid_ntp_reply_received_time = receive_time;
