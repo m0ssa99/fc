@@ -14,7 +14,7 @@ namespace fc
 {
   namespace detail {
 
-  class ntp_impl 
+  class ntp_impl
   {
     public:
       /** vector < host, port >  */
@@ -34,16 +34,18 @@ namespace fc
 
       ntp_impl() :
       _ntp_thread("ntp"),
-      _request_interval_sec( 60*60 /* 1 hr */),
+      _request_interval_sec( 15*60 /* 15 min */),
       _retry_failed_request_interval_sec(60 * 5),
       _last_ntp_delta_microseconds(0)
-      { 
+      {
         _last_ntp_delta_initialized = false;
-        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org",123 ) );
-      } 
+        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.google.com", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.cloudflare.com", 123 ) );
+      }
 
-      ~ntp_impl() 
-      { 
+      ~ntp_impl()
+      {
       }
 
       fc::time_point ntp_timestamp_to_fc_time_point(uint64_t ntp_timestamp_net_order)
@@ -72,7 +74,7 @@ namespace fc
         assert(_ntp_thread.is_current());
         for( auto item : _ntp_hosts )
         {
-          try 
+          try
           {
             //wlog( "resolving... ${r}", ("r", item) );
             auto eps = resolve( item.first, item.second );
@@ -87,7 +89,7 @@ namespace fc
               _sock.send_to(send_buffer, packet_to_send.size(), ep);
               break;
             }
-          } 
+          }
           catch (const fc::canceled_exception&)
           {
             throw;
@@ -95,23 +97,32 @@ namespace fc
           // this could fail to resolve but we want to go on to other hosts..
           catch ( const fc::exception& e )
           {
-            elog( "${e}", ("e",e.to_detail_string() ) ); 
+            elog( "${e}", ("e",e.to_detail_string() ) );
           }
         }
       } // request_now
 
       // started for first time in ntp() constructor, canceled in ~ntp() destructor
       // this task gets invoked every _retry_failed_request_interval_sec (currently 5 min), and if
-      // _request_interval_sec (currently 1 hour) has passed since the last successful update, 
+      // _request_interval_sec (currently 1 hour) has passed since the last successful update,
       // it sends a new request
       void request_time_task()
       {
         assert(_ntp_thread.is_current());
+
+        // Check if NTP hasn't been updated for too long
+        if (_last_ntp_delta_initialized) {
+          auto time_since_last_update = fc::time_point::now() - _last_valid_ntp_reply_received_time;
+          if (time_since_last_update > fc::seconds(_request_interval_sec * 2)) {
+            wlog("NTP has not been updated for ${sec} seconds", ("sec", time_since_last_update.count() / 1000000));
+          }
+        }
+
         if (_last_valid_ntp_reply_received_time <= fc::time_point::now() - fc::seconds(_request_interval_sec - 5))
           request_now();
         if (!_request_time_task_done.valid() || !_request_time_task_done.canceled())
-          _request_time_task_done = schedule( [=](){ request_time_task(); }, 
-                                              fc::time_point::now() + fc::seconds(_retry_failed_request_interval_sec), 
+          _request_time_task_done = schedule( [=](){ request_time_task(); },
+                                              fc::time_point::now() + fc::seconds(_retry_failed_request_interval_sec),
                                               "request_time_task" );
       } // request_loop
 
@@ -133,7 +144,7 @@ namespace fc
         {
           // if you start the read while loop here, the recieve_from call will throw "invalid argument" on win32,
           // so instead we start the loop after making our first request
-          try 
+          try
           {
             _sock.open();
             request_time_task(); //this will re-send a time request
@@ -160,8 +171,8 @@ namespace fc
               //     ("origin_time", origin_time)("server_receive_time", server_receive_time)("server_transmit_time", server_transmit_time)("receive_time", receive_time));
               // wlog("ntp offset: ${offset}, round_trip_delay ${delay}", ("offset", offset)("delay", round_trip_delay));
 
-              //if the reply we just received has occurred more than a second after our last time request (it was more than a second ago since our last request)
-              if( round_trip_delay > fc::microseconds(300000) )
+              //if the reply we just received has occurred more than 150ms after our last time request
+              if( round_trip_delay > fc::microseconds(150000) )
               {
                 wlog("received stale ntp reply requested at ${request_time}, send a new time request", ("request_time", origin_time));
                 request_now(); //request another reply and ignore this one
@@ -170,14 +181,27 @@ namespace fc
               {
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
-                  _last_ntp_delta_microseconds = offset.count();
+                  int64_t new_delta = offset.count();
+
+                  // Track significant delta changes
+                  static int64_t previous_delta = 0;
+                  if (_last_ntp_delta_initialized) {
+                    int64_t delta_change = std::abs(new_delta - previous_delta);
+                    if (delta_change > 100000) {  // 100ms threshold
+                      wlog("NTP delta changed significantly: ${change} us (from ${old} to ${new})",
+                           ("change", delta_change)("old", previous_delta)("new", new_delta));
+                    }
+                  }
+                  previous_delta = new_delta;
+
+                  _last_ntp_delta_microseconds = new_delta;
                   _last_ntp_delta_initialized = true;
                   fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
                   _last_valid_ntp_reply_received_time = receive_time;
                   wlog("ntp_delta_time updated to ${delta_time} us", ("delta_time",ntp_delta_time) );
                 }
                 else
-                  elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}", 
+                  elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}",
                        ("ntp_time", receive_time + offset)("local", fc::time_point::now()) );
               }
             }
@@ -228,11 +252,11 @@ namespace fc
       {
         wlog( "Exception thrown while shutting down NTP's request_time_task, ignoring" );
       }
-      
-      try 
+
+      try
       {
         my->_read_loop_done.cancel_and_wait("ntp object is destructing");
-      } 
+      }
       catch ( const fc::exception& e )
       {
         wlog( "Exception thrown while shutting down NTP's read_loop, ignoring: ${e}", ("e",e) );
