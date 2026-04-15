@@ -197,6 +197,14 @@
 */
 #define CONSOLE_WHITE "\033[37m"
 
+/// Extended colors (bright / 256-color variants)
+#define CONSOLE_LIGHT_GRAY   "\033[37m"   ///< Light gray (same as white in 16-color)
+#define CONSOLE_DARK_GRAY    "\033[90m"   ///< Dark gray (bright black)
+#define CONSOLE_YELLOW       "\033[93m"   ///< Bright yellow
+#define CONSOLE_BRIGHT_GREEN "\033[92m"   ///< Bright green
+#define CONSOLE_ORANGE       "\033[33m"   ///< Orange (dark yellow / brown)
+#define CONSOLE_BRIGHT_BLUE  "\033[94m"   ///< Bright blue
+
 /**
     @def CONSOLE_BLACK_BG
     @brief Print text with black background.
@@ -300,7 +308,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_HALF_BRIGHT 
+#define CONSOLE_HALF_BRIGHT
 
 /**
     @def CONSOLE_ITALIC
@@ -311,7 +319,7 @@
 
     (const char*)
 */
-#define CONSOLE_ITALIC 
+#define CONSOLE_ITALIC
 
 /**
     @def CONSOLE_UNDERLINE
@@ -329,7 +337,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_BLINK 
+#define CONSOLE_BLINK
 
 /**
     @def CONSOLE_RAPID_BLINK
@@ -337,7 +345,7 @@
 
     (const char*)
 */
-#define CONSOLE_RAPID_BLINK 
+#define CONSOLE_RAPID_BLINK
 
 /**
     @def CONSOLE_REVERSED
@@ -355,7 +363,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_CONCEALED 
+#define CONSOLE_CONCEALED
 
 /**
     @def CONSOLE_STRIKETHROUGH
@@ -364,7 +372,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_STRIKETHROUGH 
+#define CONSOLE_STRIKETHROUGH
 
 /// @}
 
@@ -452,6 +460,14 @@
 */
 #define CONSOLE_WHITE (CONSOLE_RED | CONSOLE_BLUE | CONSOLE_GREEN)
 
+/// Extended colors (bright / high-intensity variants)
+#define CONSOLE_LIGHT_GRAY   (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+#define CONSOLE_DARK_GRAY    FOREGROUND_INTENSITY
+#define CONSOLE_YELLOW       (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+#define CONSOLE_BRIGHT_GREEN (FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+#define CONSOLE_ORANGE       (FOREGROUND_RED | FOREGROUND_GREEN)
+#define CONSOLE_BRIGHT_BLUE  (FOREGROUND_BLUE | FOREGROUND_INTENSITY)
+
 /**
     @def CONSOLE_BLACK_BG
     @brief Print text with black background.
@@ -534,7 +550,7 @@
 #define CONSOLE_ITALIC ""
 #define CONSOLE_UNDERLINE ""
 #define CONSOLE_BLINK ""
-#define CONSOLE_RAPID_BLINK "" 
+#define CONSOLE_RAPID_BLINK ""
 #define CONSOLE_REVERSED ""
 #define CONSOLE_CONCEALED ""
 #define CONSOLE_STRIKETHROUGH ""
@@ -554,6 +570,13 @@
 #define CONSOLE_MAGENTA_BG  ""
 #define CONSOLE_CYAN_BG  ""
 #define CONSOLE_WHITE_BG  ""
+
+#define CONSOLE_LIGHT_GRAY   ""
+#define CONSOLE_DARK_GRAY    ""
+#define CONSOLE_YELLOW       ""
+#define CONSOLE_BRIGHT_GREEN ""
+#define CONSOLE_ORANGE       ""
+#define CONSOLE_BRIGHT_BLUE  ""
 
 /// @}
 /// @endcond INTERNAL_DEV
