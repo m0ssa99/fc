@@ -113,7 +113,7 @@ namespace fc
         if (_last_ntp_delta_initialized) {
           auto time_since_last_update = fc::time_point::now() - _last_valid_ntp_reply_received_time;
           if (time_since_last_update > fc::seconds(_request_interval_sec * 2)) {
-            wlog("NTP has not been updated for ${sec} seconds", ("sec", time_since_last_update.count() / 1000000));
+            wlog("\033[94mNTP has not been updated for ${sec} seconds\033[0m", ("sec", time_since_last_update.count() / 1000000));
           }
         }
         if (_last_valid_ntp_reply_received_time <= fc::time_point::now() - fc::seconds(_request_interval_sec - 5))
@@ -185,7 +185,7 @@ namespace fc
                   if (_last_ntp_delta_initialized) {
                     int64_t delta_change = std::abs(new_delta - previous_delta);
                     if (delta_change > 100000) {  // 100ms threshold
-                      wlog("NTP delta changed significantly: ${change} us (from ${old} to ${new})",
+                      wlog("\033[94mNTP delta changed significantly: ${change} us (from ${old} to ${new})\033[0m",
                            ("change", delta_change)("old", previous_delta)("new", new_delta));
                     }
                   }
@@ -194,7 +194,7 @@ namespace fc
                   _last_ntp_delta_initialized = true;
                   fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
                   _last_valid_ntp_reply_received_time = receive_time;
-                  wlog("ntp_delta_time updated to ${delta_time} us", ("delta_time",ntp_delta_time) );
+                  wlog("\033[94mntp_delta_time updated to ${delta_time} us\033[0m", ("delta_time",ntp_delta_time) );
                 }
                 else
                   elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}",
