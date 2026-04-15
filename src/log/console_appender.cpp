@@ -70,97 +70,17 @@ namespace fc {
    #endif
    get_console_color(console_appender::color::type t ) {
       switch( t ) {
-         case console_appender::color::red:          return CONSOLE_RED;
-         case console_appender::color::green:        return CONSOLE_GREEN;
-         case console_appender::color::brown:        return CONSOLE_BROWN;
-         case console_appender::color::blue:         return CONSOLE_BLUE;
-         case console_appender::color::magenta:      return CONSOLE_MAGENTA;
-         case console_appender::color::cyan:         return CONSOLE_CYAN;
-         case console_appender::color::white:        return CONSOLE_WHITE;
-         case console_appender::color::light_gray:   return CONSOLE_LIGHT_GRAY;
-         case console_appender::color::dark_gray:    return CONSOLE_DARK_GRAY;
-         case console_appender::color::yellow:       return CONSOLE_YELLOW;
-         case console_appender::color::bright_green: return CONSOLE_BRIGHT_GREEN;
-         case console_appender::color::orange:       return CONSOLE_ORANGE;
-         case console_appender::color::bright_blue:  return CONSOLE_BRIGHT_BLUE;
+         case console_appender::color::red: return CONSOLE_RED;
+         case console_appender::color::green: return CONSOLE_GREEN;
+         case console_appender::color::brown: return CONSOLE_BROWN;
+         case console_appender::color::blue: return CONSOLE_BLUE;
+         case console_appender::color::magenta: return CONSOLE_MAGENTA;
+         case console_appender::color::cyan: return CONSOLE_CYAN;
+         case console_appender::color::white: return CONSOLE_WHITE;
          case console_appender::color::console_default:
          default:
             return CONSOLE_DEFAULT;
       }
-   }
-
-   // Detect the appropriate console color for a log message based on its content.
-   // Content patterns take priority over log-level colors, except that errors/warnings
-   // not matching a specific pattern always get red.
-   static console_appender::color::type detect_content_color(
-      const std::string& message, log_level level)
-   {
-      // NTP — blue (overrides even warn/error level)
-      if (message.find("NTP") != std::string::npos)
-         return console_appender::color::bright_blue;
-
-      // Errors and warnings — red
-      if (level == log_level::error || level == log_level::warn)
-         return console_appender::color::red;
-
-      // Got block — yellow
-      if (message.find("Got block") != std::string::npos)
-         return console_appender::color::yellow;
-
-      // Generated block — bright green
-      if (message.find("Generated block") != std::string::npos)
-         return console_appender::color::bright_green;
-
-      // Snapshot export — bright green
-      if (message.find("Creating snapshot") != std::string::npos ||
-          message.find("Snapshot at block") != std::string::npos ||
-          message.find("Exported ") != std::string::npos ||
-          message.find("Compressed snapshot") != std::string::npos ||
-          message.find("Snapshot created") != std::string::npos ||
-          message.find("Periodic snapshot at block") != std::string::npos ||
-          message.find("Reached snapshot-at-block") != std::string::npos ||
-          message.find("Creating deferred snapshot") != std::string::npos ||
-          message.find("Deferring snapshot") != std::string::npos ||
-          message.find("Deferring periodic snapshot") != std::string::npos ||
-          message.find("Snapshot cache updated") != std::string::npos ||
-          message.find("Snapshot still deferred") != std::string::npos)
-         return console_appender::color::bright_green;
-
-      // Snapshot import — orange
-      if (message.find("Loading snapshot from") != std::string::npos ||
-          message.find("Snapshot loaded") != std::string::npos ||
-          message.find("Decompressed snapshot") != std::string::npos ||
-          message.find("from snapshot file") != std::string::npos ||
-          message.find("Imported ") != std::string::npos ||
-          message.find("Snapshot header validated") != std::string::npos ||
-          message.find("Snapshot checksum") != std::string::npos ||
-          message.find("Clearing genesis objects") != std::string::npos ||
-          message.find("All objects imported") != std::string::npos ||
-          message.find("Fork database seeded") != std::string::npos)
-         return console_appender::color::orange;
-
-      // Snapshot serving (server/client transfer) — yellow
-      if (message.find("Snapshot server:") != std::string::npos ||
-          message.find("Snapshot TCP server") != std::string::npos ||
-          message.find("Download complete") != std::string::npos ||
-          message.find("Downloaded ") != std::string::npos ||
-          message.find("Querying snapshot") != std::string::npos ||
-          message.find("Snapshot saved to") != std::string::npos ||
-          message.find("Selected peer") != std::string::npos ||
-          message.find("Peer ") != std::string::npos &&
-              message.find("snapshot") != std::string::npos)
-         return console_appender::color::yellow;
-
-      // Elapsed time reply (JSON-RPC) — dark gray
-      if (message.find("elapsed:") != std::string::npos)
-         return console_appender::color::dark_gray;
-
-      // Webserver API request (data: prefix from dump_rpc_time) — dark gray
-      if (message.find("data: ") != std::string::npos)
-         return console_appender::color::dark_gray;
-
-      // Default — light gray
-      return console_appender::color::light_gray;
    }
 
    boost::mutex& log_mutex() {
@@ -202,7 +122,7 @@ namespace fc {
 
       fc::unique_lock<boost::mutex> lock(log_mutex());
 
-      print( line.str(), detect_content_color(message, m.get_context().get_log_level()) );
+      print( line.str(), my->lc[m.get_context().get_log_level()] );
 
       fprintf( out, "\n" );
 

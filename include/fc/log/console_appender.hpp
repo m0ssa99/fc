@@ -10,13 +10,6 @@ namespace fc {
         struct color {
             enum type {
                 red, green, brown, blue, magenta, cyan, white, console_default,
-                // Extended content-based colors
-                light_gray,   ///< Default info text
-                dark_gray,    ///< Webserver requests / elapsed time
-                yellow,       ///< Got block / snapshot serving
-                bright_green, ///< Generated block / snapshot export
-                orange,       ///< Snapshot import
-                bright_blue,  ///< NTP
             };
         };
 
