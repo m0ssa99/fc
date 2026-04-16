@@ -1,12 +1,15 @@
 #pragma once
 #include <fc/thread/thread.hpp>
-#include <boost/context/all.hpp>
+#include <boost/version.hpp>
+#if BOOST_VERSION >= 108300
+  #include <boost/context/fiber.hpp>
+#else
+  #include <boost/context/all.hpp>
+#endif
 #include <fc/exception/exception.hpp>
 #include <vector>
 
 #include <iostream>
-
-#include <boost/version.hpp>
 
 #define BOOST_COROUTINES_NO_DEPRECATION_WARNING // Boost 1.61
 #define BOOST_COROUTINE_NO_DEPRECATION_WARNING // Boost 1.62
@@ -53,11 +56,11 @@ namespace fc {
   struct context  {
     typedef fc::context* ptr;
 
-#if BOOST_VERSION >= 105400 // && BOOST_VERSION <= 106100 
+#if BOOST_VERSION >= 105400 // && BOOST_VERSION <= 106100
     bco::stack_context stack_ctx;
 #endif
 
-#if BOOST_VERSION >= 106100 
+#if BOOST_VERSION >= 106100
     using context_fn = void (*)(bc::transfer_t);
 #else
     using context_fn = void(*)(intptr_t);
@@ -66,9 +69,9 @@ namespace fc {
     context( context_fn sf, stack_allocator& alloc, fc::thread* t )
     : caller_context(0),
       stack_alloc(&alloc),
-      next_blocked(0), 
-      next_blocked_mutex(0), 
-      next(0), 
+      next_blocked(0),
+      next_blocked_mutex(0),
+      next(0),
       ctx_thread(t),
       canceled(false),
 #ifndef NDEBUG
@@ -81,7 +84,7 @@ namespace fc {
 #if BOOST_VERSION >= 105600
      size_t stack_size = FC_CONTEXT_STACK_SIZE;
      alloc.allocate(stack_ctx, stack_size);
-     my_context = bc::make_fcontext( stack_ctx.sp, stack_ctx.size, sf); 
+     my_context = bc::make_fcontext( stack_ctx.sp, stack_ctx.size, sf);
 #elif BOOST_VERSION >= 105400
      size_t stack_size = FC_CONTEXT_STACK_SIZE;
      alloc.allocate(stack_ctx, stack_size);
@@ -99,16 +102,16 @@ namespace fc {
     }
 
     context( fc::thread* t) :
-#if BOOST_VERSION >= 105600 && BOOST_VERSION <= 106100 
+#if BOOST_VERSION >= 105600 && BOOST_VERSION <= 106100
      my_context(nullptr),
 #elif BOOST_VERSION >= 105300
      my_context(new bc::fcontext_t),
 #endif
      caller_context(0),
      stack_alloc(0),
-     next_blocked(0), 
-     next_blocked_mutex(0), 
-     next(0), 
+     next_blocked(0),
+     next_blocked_mutex(0),
+     next(0),
      ctx_thread(t),
      canceled(false),
 #ifndef NDEBUG
@@ -161,7 +164,7 @@ namespace fc {
       promise_base* prom;
       bool          required;
     };
-    
+
     /**
      *  @todo Have a list of promises so that we can wait for
      *    P1 or P2 and either will unblock instead of requiring both
@@ -233,7 +236,7 @@ namespace fc {
     fc::context*                caller_context;
     stack_allocator*            stack_alloc;
     priority                     prio;
-    //promise_base*              prom; 
+    //promise_base*              prom;
     std::vector<blocked_promise> blocking_prom;
     time_point                   resume_time;
    // time_point                   ready_time; // time that this context was put on ready queue
@@ -250,5 +253,4 @@ namespace fc {
     uint64_t                     context_posted_num; // serial number set each tiem the context is added to the ready list
   };
 
-} // naemspace fc 
-
+} // naemspace fc
