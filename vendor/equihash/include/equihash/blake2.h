@@ -57,6 +57,7 @@ typedef struct __blake2s_param {
     uint8_t salt[BLAKE2S_SALTBYTES]; // 24
     uint8_t personal[BLAKE2S_PERSONALBYTES];  // 32
 } blake2s_param;
+#pragma pack(pop)
 
 ALIGN(64) typedef struct __blake2s_state {
     uint32_t h[8];
@@ -67,6 +68,7 @@ ALIGN(64) typedef struct __blake2s_state {
     uint8_t last_node;
 } blake2s_state;
 
+#pragma pack(push, 1)
 typedef struct __blake2b_param {
     uint8_t digest_length; // 1
     uint8_t key_length;    // 2
@@ -80,6 +82,7 @@ typedef struct __blake2b_param {
     uint8_t salt[BLAKE2B_SALTBYTES]; // 48
     uint8_t personal[BLAKE2B_PERSONALBYTES];  // 64
 } blake2b_param;
+#pragma pack(pop)
 
 ALIGN(64) typedef struct __blake2b_state {
     uint64_t h[8];
@@ -103,7 +106,6 @@ ALIGN(64) typedef struct __blake2bp_state {
     uint8_t buf[4 * BLAKE2B_BLOCKBYTES];
     size_t buflen;
 } blake2bp_state;
-#pragma pack(pop)
 
 // Streaming API
 int blake2s_init(blake2s_state *S, const uint8_t outlen);
@@ -163,4 +165,3 @@ static inline int blake2(uint8_t *out, const void *in, const void *key, const ui
 #endif
 
 #endif
-
