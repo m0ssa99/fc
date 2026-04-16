@@ -34,7 +34,7 @@ endif()
 set(ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 
 set(BOOST_COMPONENTS)
-list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options signals serialization chrono unit_test_framework context locale iostreams)
+list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams)
 set(Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF")
 
 if(ECC_IMPL STREQUAL openssl)
@@ -112,14 +112,12 @@ if(WIN32)
     set(Boost_USE_MULTITHREADED ON)
     set(BOOST_ALL_DYN_LINK OFF) # force dynamic linking for all libraries
 
-    find_package(Boost 1.53 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
-    # For Boost 1.53 on windows, coroutine was not in BOOST_LIBRARYDIR and do not need it to build,  but if boost versin >= 1.54, find coroutine otherwise will cause link errors
-    if(NOT "${Boost_VERSION}" MATCHES "1.53(.*)")
-        set(BOOST_LIBRARIES_TEMP ${Boost_LIBRARIES})
-        find_package(Boost 1.54 REQUIRED COMPONENTS coroutine)
-        list(APPEND BOOST_COMPONENTS coroutine)
-        set(Boost_LIBRARIES ${BOOST_LIBRARIES_TEMP} ${Boost_LIBRARIES})
-    endif()
+    find_package(Boost 1.71 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+    # coroutine is always available in Boost >= 1.71
+    set(BOOST_LIBRARIES_TEMP ${Boost_LIBRARIES})
+    find_package(Boost 1.71 REQUIRED COMPONENTS coroutine)
+    list(APPEND BOOST_COMPONENTS coroutine)
+    set(Boost_LIBRARIES ${BOOST_LIBRARIES_TEMP} ${Boost_LIBRARIES})
 
     set(PLATFORM_SPECIFIC_LIBS wsock32.lib ws2_32.lib userenv.lib)
     # iphlpapi.lib
@@ -129,7 +127,7 @@ else(WIN32)
 
     list(APPEND BOOST_COMPONENTS coroutine)
 
-    find_package(Boost 1.53 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+    find_package(Boost 1.71 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a;.so")
 
