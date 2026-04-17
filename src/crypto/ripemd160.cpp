@@ -1,7 +1,6 @@
 #include <fc/crypto/hex.hpp>
 #include <fc/fwd_impl.hpp>
-#include <openssl/sha.h>
-#include <openssl/ripemd.h>
+#include <openssl/evp.h>
 #include <cstring>
 #include <fc/crypto/ripemd160.hpp>
 #include <fc/crypto/sha512.hpp>
@@ -34,11 +33,11 @@ namespace fc {
 
 
     struct ripemd160::encoder::impl {
-        impl() {
-            memset((char *) &ctx, 0, sizeof(ctx));
-        }
-
-        RIPEMD160_CTX ctx;
+        EVP_MD_CTX* ctx;
+        impl() : ctx(EVP_MD_CTX_new()) {}
+        ~impl() { EVP_MD_CTX_free(ctx); }
+        impl(const impl&) = delete;
+        impl& operator=(const impl&) = delete;
     };
 
     ripemd160::encoder::~encoder() {
@@ -67,17 +66,18 @@ namespace fc {
     }
 
     void ripemd160::encoder::write(const char *d, uint32_t dlen) {
-        RIPEMD160_Update(&my->ctx, d, dlen);
+        EVP_DigestUpdate(my->ctx, d, dlen);
     }
 
     ripemd160 ripemd160::encoder::result() {
         ripemd160 h;
-        RIPEMD160_Final((uint8_t *) h.data(), &my->ctx);
+        unsigned int md_len = 0;
+        EVP_DigestFinal_ex(my->ctx, (unsigned char *) h.data(), &md_len);
         return h;
     }
 
     void ripemd160::encoder::reset() {
-        RIPEMD160_Init(&my->ctx);
+        EVP_DigestInit_ex(my->ctx, EVP_ripemd160(), nullptr);
     }
 
     ripemd160 operator<<(const ripemd160 &h1, uint32_t i) {
@@ -125,7 +125,7 @@ namespace fc {
         if (ve.size()) {
             memcpy(&bi, ve.data(), fc::min<size_t>(ve.size(), sizeof(bi)));
         } else {
-            memset(&bi, char(0), sizeof(bi));
+            bi = ripemd160();
         }
     }
 

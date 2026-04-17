@@ -338,7 +338,7 @@ endif(BZIP2_FOUND)
 # This will become unnecessary once we update to websocketpp which fixes upstream issue #395
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWEBSOCKETPP_STRICT_MASKING")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO -DBOOST_BIND_GLOBAL_PLACEHOLDERS")
 
 option(LOG_LONG_API "Log long API calls over websocket (ON OR OFF)" ON)
 message(STATUS "LOG_LONG_API: ${LOG_LONG_API}")
