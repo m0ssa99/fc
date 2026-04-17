@@ -5,6 +5,9 @@
 
 #include "_elliptic_impl_priv.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 /* used by mixed + secp256k1 */
 
 namespace fc { namespace ecc {
@@ -82,11 +85,11 @@ namespace fc { namespace ecc {
       return public_key(pub);
     }
 
-    static int extended_nonce_function(unsigned char *nonce32, 
-                                       const unsigned char *msg32, 
-                                       const unsigned char *key32, 
-                                       const unsigned char *algo16, 
-                                       void *data, unsigned int counter) 
+    static int extended_nonce_function(unsigned char *nonce32,
+                                       const unsigned char *msg32,
+                                       const unsigned char *key32,
+                                       const unsigned char *algo16,
+                                       void *data, unsigned int counter)
     {
       unsigned int* extra = (unsigned int*) data;
       (*extra)++;
@@ -103,18 +106,19 @@ namespace fc { namespace ecc {
         {
             secp256k1_ecdsa_recoverable_signature sig;
             FC_ASSERT(secp256k1_ecdsa_sign_recoverable(detail::_get_context(),
-                   &sig, 
+                   &sig,
                    (unsigned char*)digest.data(),
-                   (unsigned char*)my->_key.data(), 
+                   (unsigned char*)my->_key.data(),
                    extended_nonce_function,
                    &counter));
             FC_ASSERT(secp256k1_ecdsa_recoverable_signature_serialize_compact(detail::_get_context(), (unsigned char*)result.begin() + 1,
                   &recid, &sig));
             FC_ASSERT(recid != -1);
-        } 
+        }
         while (!public_key::is_canonical(result));
         result.begin()[0] = 27 + 4 + recid;
         return result;
     }
 
 }}
+#pragma GCC diagnostic pop
