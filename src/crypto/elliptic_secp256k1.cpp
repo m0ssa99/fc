@@ -24,6 +24,9 @@
 
 #include "_elliptic_impl_priv.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 namespace fc {
     namespace ecc {
         namespace detail {
@@ -35,8 +38,8 @@ namespace fc {
 
             void _init_lib() {
                 static const secp256k1_context *ctx = _get_context();
-                static int init_o = init_openssl();
                 (void) ctx;
+                (void) init_openssl();
             }
 
             class public_key_impl {
@@ -575,3 +578,4 @@ namespace fc {
 
     }
 }
+#pragma GCC diagnostic pop

@@ -382,6 +382,8 @@ std::vector<char> aes_load( const fc::path& file, const fc::sha512& key )
   so the CRYPTO_set_id_callback() function needs to be called before there's any
   chance of OpenSSL being accessed from multiple threads.
 */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 struct openssl_thread_config
 {
   static boost::mutex* openssl_mutexes;
@@ -439,3 +441,4 @@ openssl_thread_config::~openssl_thread_config()
 }
 
 }  // namespace fc
+#pragma GCC diagnostic pop

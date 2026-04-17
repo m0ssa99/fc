@@ -13,6 +13,9 @@
 
 /* stuff common to all ecc implementations */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #define BTC_EXT_PUB_MAGIC   (0x0488B21E)
 #define BTC_EXT_PRIV_MAGIC  (0x0488ADE4)
 
@@ -269,7 +272,7 @@ namespace fc { namespace ecc {
         memcpy( dest, key.begin(), key.size() );
         return result;
     }
-    
+
     extended_public_key extended_public_key::deserialize( const extended_key_data& data )
     {
        return from_base58( _to_base58( data ) );
@@ -340,7 +343,7 @@ namespace fc { namespace ecc {
         memcpy( dest, key.data(), key.data_size() );
         return result;
     }
-    
+
     extended_private_key extended_private_key::deserialize( const extended_key_data& data )
     {
        return from_base58( _to_base58( data ) );
@@ -413,3 +416,5 @@ void from_variant( const variant& var,  ecc::public_key& vo )
 }
 
 }
+
+#pragma GCC diagnostic pop

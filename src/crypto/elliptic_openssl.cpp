@@ -11,11 +11,14 @@
 
 #include "_elliptic_impl_pub.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 namespace fc { namespace ecc {
     namespace detail
     {
         void _init_lib() {
-            static int init_o = init_openssl();
+            (void)init_openssl();
         }
 
         class private_key_impl
@@ -259,3 +262,4 @@ namespace fc { namespace ecc {
         } FC_RETHROW_EXCEPTIONS( warn, "sign ${digest}", ("digest", digest)("private_key",*this) );
     }
 } }
+#pragma GCC diagnostic pop

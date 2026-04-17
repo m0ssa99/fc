@@ -8,7 +8,7 @@ namespace fc {
 
 void rand_bytes(char* buf, int count)
 {
-  static int init = init_openssl();
+  (void)init_openssl();
 
   int result = RAND_bytes((unsigned char*)buf, count);
   if (result != 1)

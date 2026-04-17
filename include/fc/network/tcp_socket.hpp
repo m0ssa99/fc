@@ -68,9 +68,9 @@ namespace fc {
         class impl;
 
 #ifdef _WIN64
-        fc::fwd<impl,0x81> my;
+        fc::fwd<impl,0x90> my;
 #else
-        fc::fwd<impl, 0x54> my;
+        fc::fwd<impl, 0x78> my;
 #endif
     };
 
@@ -108,4 +108,3 @@ namespace fc {
     };
 
 } // namesapce fc
-
