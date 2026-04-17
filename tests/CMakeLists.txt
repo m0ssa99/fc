@@ -7,24 +7,24 @@ target_link_libraries( api fc )
 
 if( ECC_IMPL STREQUAL secp256k1 )
     add_executable( blind all_tests.cpp crypto/blind.cpp )
-    target_link_libraries( blind fc )
+    target_link_libraries( blind fc Boost::unit_test_framework )
 endif()
 
 add_executable( ntp_test all_tests.cpp network/ntp_test.cpp )
-target_link_libraries( ntp_test fc )
+target_link_libraries( ntp_test fc Boost::unit_test_framework )
 
 add_executable( task_cancel_test all_tests.cpp thread/task_cancel.cpp )
-target_link_libraries( task_cancel_test fc )
+target_link_libraries( task_cancel_test fc Boost::unit_test_framework )
 
 
 add_executable( bloom_test all_tests.cpp bloom_test.cpp )
-target_link_libraries( bloom_test fc )
+target_link_libraries( bloom_test fc Boost::unit_test_framework )
 
 add_executable( real128_test all_tests.cpp real128_test.cpp )
-target_link_libraries( real128_test fc )
+target_link_libraries( real128_test fc Boost::unit_test_framework )
 
 add_executable( hmac_test hmac_test.cpp )
-target_link_libraries( hmac_test fc )
+target_link_libraries( hmac_test fc Boost::unit_test_framework )
 
 add_executable( ecc_test crypto/ecc_test.cpp )
 target_link_libraries( ecc_test fc )
@@ -55,4 +55,4 @@ add_executable( all_tests all_tests.cpp
                           real128_test.cpp
                           utf8_test.cpp
                           )
-target_link_libraries( all_tests fc )
+target_link_libraries( all_tests fc Boost::unit_test_framework )
