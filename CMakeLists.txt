@@ -25,6 +25,7 @@ set(DEFAULT_EXECUTABLE_INSTALL_DIR bin/)
 set(CMAKE_DEBUG_POSTFIX _debug)
 set(BUILD_SHARED_LIBS NO)
 set(ECC_IMPL secp256k1 CACHE STRING "secp256k1 or openssl or mixed")
+option(BUILD_FC_TESTS "Build fc test executables" ON)
 
 set(platformBitness 32)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -390,7 +391,9 @@ endif()
 include_directories(vendor/websocketpp)
 include_directories(vendor/equihash)
 
-add_subdirectory(tests)
+if(BUILD_FC_TESTS)
+    add_subdirectory(tests)
+endif()
 
 if(WIN32)
     # add addtional import library on windows platform
