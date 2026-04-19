@@ -9,6 +9,8 @@
 
 #include <atomic>
 #include <array>
+#include <deque>
+#include <algorithm>
 
 namespace fc
 {
@@ -31,6 +33,9 @@ namespace fc
 
 
       fc::future<void>                                 _request_time_task_done;
+
+      static constexpr size_t                          _delta_history_max_size = 5;
+      std::deque<int64_t>                              _delta_history;
 
       ntp_impl() :
       _ntp_thread("ntp"),
@@ -180,21 +185,43 @@ namespace fc
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
                   int64_t new_delta = offset.count();
-                  // Track significant delta changes
-                  static int64_t previous_delta = 0;
-                  if (_last_ntp_delta_initialized) {
-                    int64_t delta_change = std::abs(new_delta - previous_delta);
-                    if (delta_change > 100000) {  // 100ms threshold
-                      wlog("\033[94mNTP delta changed significantly: ${change} us (from ${old} to ${new})\033[0m",
-                           ("change", delta_change)("old", previous_delta)("new", new_delta));
+
+                  // Reject offsets that deviate too much from the moving average
+                  bool should_accept = true;
+                  if (_delta_history.size() >= 2) {
+                    int64_t sum = 0;
+                    for (int64_t d : _delta_history)
+                      sum += d;
+                    int64_t moving_avg = sum / static_cast<int64_t>(_delta_history.size());
+                    int64_t deviation = std::abs(new_delta - moving_avg);
+                    // Threshold: 50% of |moving_avg|, with a minimum of 5000 us (5ms)
+                    int64_t threshold = std::max(std::abs(moving_avg) / 2, static_cast<int64_t>(5000));
+                    if (deviation > threshold) {
+                      wlog("\033[91mNTP delta rejected: ${new} us deviates ${dev} us from moving average ${avg} us (threshold ${thresh} us)\033[0m",
+                           ("new", new_delta)("dev", deviation)("avg", moving_avg)("thresh", threshold));
+                      should_accept = false;
                     }
                   }
-                  previous_delta = new_delta;
-                  _last_ntp_delta_microseconds = new_delta;
-                  _last_ntp_delta_initialized = true;
-                  fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
-                  _last_valid_ntp_reply_received_time = receive_time;
-                  wlog("\033[94mntp_delta_time updated to ${delta_time} us\033[0m", ("delta_time",ntp_delta_time) );
+
+                  if (should_accept) {
+                    // Update moving average history
+                    _delta_history.push_back(new_delta);
+                    if (_delta_history.size() > _delta_history_max_size)
+                      _delta_history.pop_front();
+
+                    // Compute smoothed delta as moving average
+                    int64_t sum = 0;
+                    for (int64_t d : _delta_history)
+                      sum += d;
+                    int64_t smoothed_delta = sum / static_cast<int64_t>(_delta_history.size());
+
+                    _last_ntp_delta_microseconds = smoothed_delta;
+                    _last_ntp_delta_initialized = true;
+                    fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
+                    _last_valid_ntp_reply_received_time = receive_time;
+                    wlog("\033[94mntp_delta_time updated to ${delta_time} us (raw: ${raw} us, avg of ${count} samples)\033[0m",
+                         ("delta_time", ntp_delta_time)("raw", new_delta)("count", _delta_history.size()));
+                  }
                 }
                 else
                   elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}",
