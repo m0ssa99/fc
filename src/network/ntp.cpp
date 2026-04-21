@@ -34,14 +34,21 @@ namespace fc
 
       fc::future<void>                                 _request_time_task_done;
 
-      static constexpr size_t                          _delta_history_max_size = 5;
+      size_t                                           _delta_history_max_size;
       std::deque<int64_t>                              _delta_history;
+      uint32_t                                         _round_trip_threshold_us;
+      uint32_t                                         _rejection_threshold_pct;
+      uint32_t                                         _rejection_min_threshold_us;
 
       ntp_impl() :
       _ntp_thread("ntp"),
       _request_interval_sec( 15*60 /* 15 min */),
       _retry_failed_request_interval_sec(60 * 5),
-      _last_ntp_delta_microseconds(0)
+      _last_ntp_delta_microseconds(0),
+      _delta_history_max_size(5),
+      _round_trip_threshold_us(150000),
+      _rejection_threshold_pct(50),
+      _rejection_min_threshold_us(5000)
       {
         _last_ntp_delta_initialized = false;
         _ntp_hosts.push_back( std::make_pair( "pool.ntp.org", 123 ) );
@@ -174,8 +181,8 @@ namespace fc
               //     ("origin_time", origin_time)("server_receive_time", server_receive_time)("server_transmit_time", server_transmit_time)("receive_time", receive_time));
               // wlog("ntp offset: ${offset}, round_trip_delay ${delay}", ("offset", offset)("delay", round_trip_delay));
 
-              //if the reply we just received has occurred more than 150ms after our last time request
-              if( round_trip_delay > fc::microseconds(150000) )
+              //if the reply we just received has occurred more than the configured threshold after our last time request
+              if( round_trip_delay > fc::microseconds(_round_trip_threshold_us) )
               {
                 wlog("received stale ntp reply requested at ${request_time}, send a new time request", ("request_time", origin_time));
                 request_now(); //request another reply and ignore this one
@@ -194,8 +201,8 @@ namespace fc
                       sum += d;
                     int64_t moving_avg = sum / static_cast<int64_t>(_delta_history.size());
                     int64_t deviation = std::abs(new_delta - moving_avg);
-                    // Threshold: 50% of |moving_avg|, with a minimum of 5000 us (5ms)
-                    int64_t threshold = std::max(std::abs(moving_avg) / 2, static_cast<int64_t>(5000));
+                    // Threshold: configured pct of |moving_avg|, with a configured minimum
+                    int64_t threshold = std::max(std::abs(moving_avg) * static_cast<int64_t>(_rejection_threshold_pct) / 100, static_cast<int64_t>(_rejection_min_threshold_us));
                     if (deviation > threshold) {
                       wlog("\033[91mNTP delta rejected: ${new} us deviates ${dev} us from moving average ${avg} us (threshold ${thresh} us)\033[0m",
                            ("new", new_delta)("dev", deviation)("avg", moving_avg)("thresh", threshold));
@@ -302,6 +309,40 @@ namespace fc
   {
     my->_request_interval_sec = interval_sec;
     my->_retry_failed_request_interval_sec = std::min(my->_retry_failed_request_interval_sec, interval_sec);
+  }
+
+  void ntp::set_retry_interval( uint32_t interval_sec )
+  {
+    my->_retry_failed_request_interval_sec = interval_sec;
+  }
+
+  void ntp::set_servers( const std::vector<std::pair<std::string, uint16_t>>& servers )
+  {
+    my->_ntp_thread.async( [this, servers](){
+      my->_ntp_hosts.clear();
+      for( const auto& s : servers )
+        my->_ntp_hosts.push_back( s );
+    }, "set_servers" ).wait();
+  }
+
+  void ntp::set_round_trip_threshold_ms( uint32_t ms )
+  {
+    my->_round_trip_threshold_us = ms * 1000;
+  }
+
+  void ntp::set_delta_history_size( size_t size )
+  {
+    my->_delta_history_max_size = size > 0 ? size : 1;
+  }
+
+  void ntp::set_rejection_threshold_pct( uint32_t pct )
+  {
+    my->_rejection_threshold_pct = pct;
+  }
+
+  void ntp::set_rejection_min_threshold_ms( uint32_t ms )
+  {
+    my->_rejection_min_threshold_us = ms * 1000;
   }
 
   void ntp::request_now()
