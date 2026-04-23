@@ -34,6 +34,8 @@ namespace fc
 
       fc::future<void>                                 _request_time_task_done;
 
+      bool                                               _valid_reply_received_this_cycle = false;
+
       size_t                                           _delta_history_max_size;
       std::deque<int64_t>                              _delta_history;
       uint32_t                                         _round_trip_threshold_us;
@@ -84,6 +86,7 @@ namespace fc
       void request_now()
       {
         assert(_ntp_thread.is_current());
+        _valid_reply_received_this_cycle = false;
         for( auto item : _ntp_hosts )
         {
           try
@@ -191,6 +194,11 @@ namespace fc
               {
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
+                  if( _valid_reply_received_this_cycle )
+                  {
+                    wlog("Ignoring additional NTP reply from ${endpoint} for this request cycle", ("endpoint", from));
+                    continue;
+                  }
                   int64_t new_delta = offset.count();
 
                   // Reject offsets that deviate too much from the moving average
@@ -211,6 +219,7 @@ namespace fc
                   }
 
                   if (should_accept) {
+                    _valid_reply_received_this_cycle = true;
                     // Update moving average history
                     _delta_history.push_back(new_delta);
                     if (_delta_history.size() > _delta_history_max_size)
