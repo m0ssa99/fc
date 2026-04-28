@@ -35,6 +35,7 @@ namespace fc
       fc::future<void>                                 _request_time_task_done;
 
       bool                                               _valid_reply_received_this_cycle = false;
+      fc::time_point                                       _last_request_sent_time;
 
       size_t                                           _delta_history_max_size;
       std::deque<int64_t>                              _delta_history;
@@ -86,6 +87,12 @@ namespace fc
       void request_now()
       {
         assert(_ntp_thread.is_current());
+        // Rate-limit: don't re-send if we already sent a request within the last 3 seconds
+        // This prevents a feedback loop where stale replies each trigger new requests
+        auto now = fc::time_point::now();
+        if( now - _last_request_sent_time < fc::seconds(3) )
+          return;
+        _last_request_sent_time = now;
         _valid_reply_received_this_cycle = false;
         for( auto item : _ntp_hosts )
         {
