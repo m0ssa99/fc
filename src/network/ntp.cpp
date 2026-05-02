@@ -94,8 +94,9 @@ namespace fc
           return;
         _last_request_sent_time = now;
         _valid_reply_received_this_cycle = false;
-        for( auto item : _ntp_hosts )
+        for( size_t i = 0; i < _ntp_hosts.size(); )
         {
+          auto& item = _ntp_hosts[i];
           try
           {
             //wlog( "resolving... ${r}", ("r", item) );
@@ -111,6 +112,7 @@ namespace fc
               _sock.send_to(send_buffer, packet_to_send.size(), ep);
               break;
             }
+            ++i;
           }
           catch (const fc::canceled_exception&)
           {
@@ -119,7 +121,19 @@ namespace fc
           // this could fail to resolve but we want to go on to other hosts..
           catch ( const fc::exception& e )
           {
-            elog( "${e}", ("e",e.to_detail_string() ) );
+            std::string detail = e.to_detail_string();
+            if( detail.find("Host not found") != std::string::npos ||
+                detail.find("asio.netdb") != std::string::npos )
+            {
+              wlog( "\033[38;5;208mNTP server ${host}:${port} is unreachable (host not found), removing from list\033[0m",
+                    ("host", item.first)("port", item.second) );
+              _ntp_hosts.erase( _ntp_hosts.begin() + i );
+            }
+            else
+            {
+              elog( "${e}", ("e", detail ) );
+              ++i;
+            }
           }
         }
       } // request_now
