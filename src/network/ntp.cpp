@@ -109,7 +109,17 @@ namespace fc
               memcpy(send_buffer.get(), packet_to_send.data(), packet_to_send.size());
               uint64_t* send_buf_as_64_array = (uint64_t*)send_buffer.get();
               send_buf_as_64_array[5] = fc_time_point_to_ntp_timestamp(fc::time_point::now()); // 5 = Transmit Timestamp
-              _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              // Guard: read_loop error recovery may have closed the socket
+              // between the time this request_now was scheduled (via
+              // ntp::request_now → async().wait()) and when it actually
+              // executes on the ntp_thread.  Re-open if necessary so we
+              // don't hit "send_to: Bad file descriptor".
+              try {
+                _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              } catch (const fc::exception&) {
+                _sock.open();
+                _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              }
               break;
             }
             ++i;
@@ -134,6 +144,14 @@ namespace fc
               elog( "${e}", ("e", detail ) );
               ++i;
             }
+          }
+          catch (...)
+          {
+            // Safety net: non-fc exceptions (e.g. boost::system::system_error
+            // from a closed socket) must not escape to the async caller, as
+            // that would crash the node when update_ntp_time()'s
+            // async().wait() rethrows.
+            ++i;
           }
         }
       } // request_now
