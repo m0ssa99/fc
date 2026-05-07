@@ -21,7 +21,7 @@ namespace fc {
         void pack(Stream &s, const flat_map<K, V, A...> &value);
 
         template<typename Stream, typename K, typename V, typename... A>
-        void unpack(Stream &s, flat_map<K, V, A...> &value, uint32_t depth);
+        void unpack(Stream &s, flat_map<K, V, A...> &value, uint32_t depth = 0);
 
 
         template<typename Stream, typename T, typename A>
