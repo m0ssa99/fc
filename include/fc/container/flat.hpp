@@ -34,8 +34,8 @@ namespace fc {
             }
         }
 
-        template<typename Stream, typename K, typename... V>
-        inline void pack(Stream &s, const flat_map<K, V...> &value) {
+        template<typename Stream, typename K, typename V, typename... A>
+        inline void pack(Stream &s, const flat_map<K, V, A...> &value) {
             pack(s, unsigned_int((uint32_t) value.size()));
             auto itr = value.begin();
             auto end = value.end();
@@ -116,8 +116,8 @@ namespace fc {
         }
     }
 
-    template<typename K, typename... T>
-    void to_variant(const flat_map<K, T...> &var, variant &vo) {
+    template<typename K, typename T, typename... A>
+    void to_variant(const flat_map<K, T, A...> &var, variant &vo) {
         std::vector<variant> vars(var.size());
         size_t i = 0;
         for (auto itr = var.begin(); itr != var.end(); ++itr, ++i) {

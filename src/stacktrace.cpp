@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <signal.h>
 #include <execinfo.h>
 #include <fc/log/logger.hpp>
@@ -76,3 +77,15 @@ namespace fc {
         ::signal(SIGILL, &stacktrace_sigill_handler);
     }
 }
+#else
+#include <fc/log/logger.hpp>
+namespace fc {
+    void print_stacktrace() {
+        // Stacktrace not supported on Windows
+    }
+
+    void install_stacktrace_crash_handler() {
+        // Crash handler signals not available on Windows
+    }
+}
+#endif

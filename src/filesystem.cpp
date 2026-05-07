@@ -10,6 +10,7 @@
 
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
+#include <algorithm>
 
 #ifdef _WIN32
 # include <windows.h>
@@ -47,7 +48,7 @@ namespace fc {
     }
 
     // Note: we can do this cast because the separator should be an ASCII character
-    char path::separator_char = static_cast<char>(boost::filesystem::path("/").make_preferred().native()[0]);
+    char path::separator_char = static_cast<char>(boost::filesystem::path("/").make_preferred().string()[0]);
 
     path::path() {
     }

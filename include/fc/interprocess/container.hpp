@@ -86,6 +86,10 @@ namespace fc {
         v = std::move(vars);
     }
 
+    // Note: bip::flat_set may be same as boost::container::flat_set in newer Boost versions
+    // to_variant for flat_set is defined in fc/container/flat.hpp
+    // Only define for bip::set (not flat_set) to avoid ambiguity
+    /*
     template<typename... T>
     void to_variant(const bip::flat_set<T...> &t, fc::variant &v) {
         std::vector<variant> vars;
@@ -95,6 +99,7 @@ namespace fc {
         }
         v = std::move(vars);
     }
+    */
 
     /*
         template<typename T, typename... A>

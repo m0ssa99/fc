@@ -35,7 +35,7 @@ endif()
 set(ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 
 set(BOOST_COMPONENTS)
-list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams)
+list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams exception)
 set(Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF")
 
 if(ECC_IMPL STREQUAL openssl)
@@ -54,17 +54,26 @@ if(MSVC)
     # autoconf won't work here, hard code the defines
     set(SECP256K1_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp")
 
-    file(GLOB SECP256K1_SOURCES "${SECP256K1_DIR}/src/secp256k1.c")
+    file(GLOB SECP256K1_SOURCES "${SECP256K1_DIR}/src/secp256k1.c"
+                                     "${SECP256K1_DIR}/src/precomputed_ecmult.c"
+                                     "${SECP256K1_DIR}/src/precomputed_ecmult_gen.c")
     add_library(secp256k1 ${SECP256K1_SOURCES})
 
     target_include_directories(secp256k1 PRIVATE "${SECP256K1_DIR}" PUBLIC "${SECP256K1_DIR}/include")
+
+    # Also define SECP256K1_NO_API_VISIBILITY_ATTRIBUTES for fc so it doesn't use __declspec(dllimport)
+    target_compile_definitions(secp256k1 INTERFACE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
 
     set(SECP256K1_BUILD_DEFINES
         USE_FIELD_10X26
         USE_FIELD_INV_BUILTIN
         USE_NUM_NONE
         USE_SCALAR_8X32
-        USE_SCALAR_INV_BUILTIN)
+        USE_SCALAR_INV_BUILTIN
+        ENABLE_MODULE_RECOVERY
+        ENABLE_MODULE_GENERATOR
+        ENABLE_MODULE_RANGEPROOF
+        SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
     set_target_properties(secp256k1 PROPERTIES COMPILE_DEFINITIONS "${SECP256K1_BUILD_DEFINES}" LINKER_LANGUAGE C)
 else(MSVC)
     include(ExternalProject)
