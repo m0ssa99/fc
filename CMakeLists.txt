@@ -35,7 +35,7 @@ endif()
 set(ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 
 set(BOOST_COMPONENTS)
-list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams exception)
+list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams)
 set(Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF")
 
 if(ECC_IMPL STREQUAL openssl)
