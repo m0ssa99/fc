@@ -1,7 +1,7 @@
 #pragma once
 #include <fc/thread/thread.hpp>
 #include <boost/version.hpp>
-#if BOOST_VERSION >= 107000
+#if BOOST_VERSION >= 108300
   #include <boost/context/fiber.hpp>
 #else
   #include <boost/context/all.hpp>
