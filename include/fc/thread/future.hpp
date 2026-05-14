@@ -283,7 +283,7 @@ namespace fc {
 
         /// @pre valid()
         bool ready() const {
-            return m_prom->ready();
+            return m_prom && m_prom->ready();
         }
 
         /// @pre valid()
@@ -390,7 +390,7 @@ namespace fc {
 
         /// @pre valid()
         bool ready() const {
-            return m_prom->ready();
+            return m_prom && m_prom->ready();
         }
 
         /// @pre valid()

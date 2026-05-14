@@ -68,9 +68,9 @@ namespace fc {
         class impl;
 
 #ifdef _WIN64
-        fc::fwd<impl,0x90> my;
+        fc::fwd<impl,0x100> my; // 64-bit Windows has a larger implementation size, so we need to increase the size of the fwd to avoid overflow. 0x78 is too small and causes memory corruption.
 #else
-        fc::fwd<impl, 0x78> my;
+        fc::fwd<impl, 0x78> my; // 120 bytes should be enough for the implementation, but if it's not, we can increase it. The fwd class will throw an exception if we try to use more than the specified size, so it's safe to set it too small, but setting it too large will waste memory.
 #endif
     };
 
