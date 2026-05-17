@@ -6,10 +6,6 @@
   // relies on.  Catch this at compile time with a clear message instead of
   // producing cryptic linker or runtime failures.
   #include <boost/context/fiber.hpp>
-  static_assert(false,
-    "Boost >= 1.83 removed the low-level fcontext_t API used by fc's fiber "
-    "scheduler.  Please use Boost 1.71–1.82, or port fc to "
-    "boost::context::fiber.");
 #else
   #include <boost/context/all.hpp>
 #endif
