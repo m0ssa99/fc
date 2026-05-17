@@ -2,7 +2,14 @@
 #include <fc/thread/thread.hpp>
 #include <boost/version.hpp>
 #if BOOST_VERSION >= 108300
+  // boost::context >= 1.83 removed the fcontext_t / jump_fcontext API that fc
+  // relies on.  Catch this at compile time with a clear message instead of
+  // producing cryptic linker or runtime failures.
   #include <boost/context/fiber.hpp>
+  static_assert(false,
+    "Boost >= 1.83 removed the low-level fcontext_t API used by fc's fiber "
+    "scheduler.  Please use Boost 1.71–1.82, or port fc to "
+    "boost::context::fiber.");
 #else
   #include <boost/context/all.hpp>
 #endif
@@ -23,7 +30,11 @@
 # include <boost/coroutine/stack_context.hpp>
   namespace bc  = boost::context;
   namespace bco = boost::coroutines;
-# if BOOST_VERSION >= 105600 && !defined(NDEBUG)
+# if BOOST_VERSION >= 105600 && !defined(NDEBUG) && !defined(_WIN32)
+  // protected_stack_allocator adds guard pages (VirtualProtect on Windows,
+  // mprotect on Linux).  On Windows the alloc/dealloc paths in fc's context
+  // destructor are mismatched → heap corruption → ntdll c0000005 crash.
+  // Always use the plain stack_allocator on Windows.
 #  include <boost/assert.hpp>
 #  include <boost/coroutine/protected_stack_allocator.hpp>
   typedef bco::protected_stack_allocator stack_allocator;
