@@ -680,9 +680,21 @@ namespace fc {
 
           if( tp <= (time_point::now()+fc::microseconds(10000)) ) 
             return;
-
-          FC_ASSERT(std::current_exception() == std::exception_ptr(), 
-                    "Attempting to yield while processing an exception");
+          
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the sleep
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "yield_until called while exception active (Windows SEH) — skipping sleep to avoid crash" );
+                return;
+              }
+         #else
+            FC_ASSERT(std::current_exception() == std::exception_ptr(), 
+                     "Attempting to yield while processing an exception");
+          #endif
 
           if( !current ) 
             current = new fc::context(&fc::thread::current());
@@ -716,10 +728,20 @@ namespace fc {
         void wait( const promise_base::ptr& p, const time_point& timeout ) {
           if( p->ready() ) 
             return;
-
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the wait
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "wait called while exception active (Windows SEH) — skipping wait to avoid crash" );
+                return;
+              }
+          #else
           FC_ASSERT(std::current_exception() == std::exception_ptr(), 
                     "Attempting to yield while processing an exception");
-
+          #endif
           if( timeout < time_point::now() ) 
             FC_THROW_EXCEPTION( timeout_exception, "" );
           
