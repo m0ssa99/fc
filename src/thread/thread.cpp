@@ -266,6 +266,12 @@ namespace fc {
 
     void thread::yield(bool reschedule) {
         my->check_fiber_exceptions();
+        #ifdef _WIN32
+            // On Windows x64 ucrtbase, yielding while an exception is active
+            // corrupts the SEH chain → FC_ASSERT → abort().  Skip the yield
+            // silently; the caller's exception handler will run without a crash.
+            if (std::current_exception() != std::exception_ptr()) return;
+        #endif
         my->start_next_fiber(reschedule);
         my->check_fiber_exceptions();
     }
@@ -292,7 +298,17 @@ namespace fc {
 
             FC_THROW_EXCEPTION(timeout_exception, "${task}", ("task", ss.str()));
         }
-
+        #ifdef _WIN32
+                // Same SEH-safety guard as wait_until: throw instead of yielding while
+                // an exception is active to avoid ucrtbase abort.
+                if (std::current_exception() != std::exception_ptr()) {
+                    fc::stringstream ss;
+                    for (auto i = p.begin(); i != p.end(); ++i)
+                        ss << (*i)->get_desc() << ", ";
+                    wlog("wait_any_until called while exception active (Windows SEH) — throwing timeout");
+                    FC_THROW_EXCEPTION(timeout_exception, "${task}", ("task", ss.str()));
+                }
+        #endif
         if (!my->current) {
             my->current = new fc::context(&fc::thread::current());
         }
@@ -386,7 +402,17 @@ namespace fc {
 
         if (timeout < time_point::now())
             FC_THROW_EXCEPTION(timeout_exception, "${task}", ("task", p->get_desc()));
-
+        #ifdef _WIN32
+                // On Windows x64 with ucrtbase, fc fibers must not yield while an
+                // exception is active — jump_fcontext corrupts the SEH chain and the
+                // process aborts via FC_ASSERT → abort() in ucrtbase.
+                // Throw timeout_exception here so the caller's catch block handles it
+                // cleanly instead of crashing the whole node.
+                if (std::current_exception() != std::exception_ptr()) {
+                    wlog("wait_until called while exception active (Windows SEH) — throwing timeout to avoid crash");
+                    FC_THROW_EXCEPTION(timeout_exception, "${task}", ("task", p->get_desc()));
+                }
+        #endif
         if (!my->current) {
             my->current = new fc::context(&fc::thread::current());
         }
