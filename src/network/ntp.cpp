@@ -43,6 +43,13 @@ namespace fc
       uint32_t                                         _rejection_threshold_pct;
       uint32_t                                         _rejection_min_threshold_us;
 
+      // Step detection: accept clock jumps when multiple consecutive
+      // NTP readings are rejected but agree with each other.
+      uint32_t                                         _consecutive_rejections = 0;
+      int64_t                                          _last_rejected_delta = 0;
+      static constexpr uint32_t                        _step_accept_threshold = 3;
+      static constexpr int64_t                         _step_consistency_us = 50000; // 50ms
+
       ntp_impl() :
       _ntp_thread("ntp"),
       _request_interval_sec( 15*60 /* 15 min */),
@@ -251,9 +258,36 @@ namespace fc
                     // Threshold: configured pct of |moving_avg|, with a configured minimum
                     int64_t threshold = std::max(std::abs(moving_avg) * static_cast<int64_t>(_rejection_threshold_pct) / 100, static_cast<int64_t>(_rejection_min_threshold_us));
                     if (deviation > threshold) {
-                      wlog("\033[91mNTP delta rejected: ${new} us deviates ${dev} us from moving average ${avg} us (threshold ${thresh} us)\033[0m",
-                           ("new", new_delta)("dev", deviation)("avg", moving_avg)("thresh", threshold));
-                      should_accept = false;
+                      // Step detection: if consecutive rejected readings are
+                      // consistent with each other, accept a clock step.
+                      bool consistent_with_prev = (_consecutive_rejections > 0) &&
+                          (std::abs(new_delta - _last_rejected_delta) <= _step_consistency_us);
+                      if (consistent_with_prev || _consecutive_rejections == 0) {
+                        _consecutive_rejections++;
+                      } else {
+                        // New direction — restart count
+                        _consecutive_rejections = 1;
+                      }
+                      _last_rejected_delta = new_delta;
+
+                      if (_consecutive_rejections >= _step_accept_threshold) {
+                        // Clock step confirmed: multiple consistent readings agree
+                        wlog("\033[93mNTP clock step detected: accepting new offset ${new} us "
+                             "(was ${avg} us, ${n} consistent readings)\033[0m",
+                             ("new", new_delta)("avg", moving_avg)("n", _consecutive_rejections));
+                        _delta_history.clear();
+                        _consecutive_rejections = 0;
+                        // Fall through to accept path below
+                      } else {
+                        wlog("\033[91mNTP delta rejected: ${new} us deviates ${dev} us from moving average ${avg} us "
+                             "(threshold ${thresh} us, step ${step}/${need})\033[0m",
+                             ("new", new_delta)("dev", deviation)("avg", moving_avg)
+                             ("thresh", threshold)("step", _consecutive_rejections)("need", _step_accept_threshold));
+                        should_accept = false;
+                      }
+                    } else {
+                      // Accepted normally — reset step detection state
+                      _consecutive_rejections = 0;
                     }
                   }
 
