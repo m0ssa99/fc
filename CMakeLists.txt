@@ -505,12 +505,19 @@ if(WIN32)
     if(MINGW)
         set(OPENSSL_CONF_SOURCE "${OPENSSL_ROOT_DIR}/openssl.cnf")
     endif(MINGW)
-    set(POST_BUILD_STEP_COMMANDS ${POST_BUILD_STEP_COMMANDS}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENSSL_CONF_SOURCE}" "${OPENSSL_CONF_TARGET}/openssl.cnf")
+    # OpenSSL 4.0 may not ship openssl.cnf; skip copy if absent
+    if(EXISTS "${OPENSSL_CONF_SOURCE}")
+        set(POST_BUILD_STEP_COMMANDS ${POST_BUILD_STEP_COMMANDS}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OPENSSL_CONF_SOURCE}" "${OPENSSL_CONF_TARGET}/openssl.cnf")
+    else()
+        message(STATUS "openssl.cnf not found at ${OPENSSL_CONF_SOURCE} — skipping copy")
+    endif()
 endif(WIN32)
 
-add_custom_command(TARGET fc POST_BUILD ${POST_BUILD_STEP_COMMANDS}
-                   COMMENT "Copying OpenSSL/ssl/openssl.cnf into target directory."
-                   )
+if(POST_BUILD_STEP_COMMANDS)
+    add_custom_command(TARGET fc POST_BUILD ${POST_BUILD_STEP_COMMANDS}
+                       COMMENT "Copying OpenSSL/ssl/openssl.cnf into target directory."
+                       )
+endif()
 
 message(STATUS "Finished fc module configuration...")
