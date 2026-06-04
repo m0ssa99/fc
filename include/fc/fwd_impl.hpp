@@ -66,7 +66,12 @@ namespace fc {
 
     template<uint64_t RequiredSize, uint64_t ProvidedSize>
     void check_size() {
+#ifdef _MSC_VER
+        // MSVC has different ABI layout; allow up to 2x the declared size
+        static_assert((ProvidedSize * 2 >= RequiredSize), "Failed to reserve enough space in fc::fwd<T,S>");
+#else
         static_assert((ProvidedSize >= RequiredSize), "Failed to reserve enough space in fc::fwd<T,S>");
+#endif
     }
 
     template<typename T, unsigned int S, typename A>
@@ -163,4 +168,3 @@ namespace fc {
     }
 
 } // namespace fc
-

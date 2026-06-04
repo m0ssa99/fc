@@ -57,16 +57,24 @@ typedef struct __blake2s_param {
     uint8_t salt[BLAKE2S_SALTBYTES]; // 24
     uint8_t personal[BLAKE2S_PERSONALBYTES];  // 32
 } blake2s_param;
+#pragma pack(pop)
 
-ALIGN(64) typedef struct __blake2s_state {
+typedef struct __blake2s_state {
     uint32_t h[8];
     uint32_t t[2];
     uint32_t f[2];
     uint8_t buf[2 * BLAKE2S_BLOCKBYTES];
     size_t buflen;
     uint8_t last_node;
-} blake2s_state;
+} blake2s_state
+#if defined(_MSC_VER)
+;
+__declspec(align(64)) struct __blake2s_state blake2s_state_aligned;
+#else
+__attribute__ ((aligned(64)));
+#endif
 
+#pragma pack(push, 1)
 typedef struct __blake2b_param {
     uint8_t digest_length; // 1
     uint8_t key_length;    // 2
@@ -80,30 +88,49 @@ typedef struct __blake2b_param {
     uint8_t salt[BLAKE2B_SALTBYTES]; // 48
     uint8_t personal[BLAKE2B_PERSONALBYTES];  // 64
 } blake2b_param;
+#pragma pack(pop)
 
-ALIGN(64) typedef struct __blake2b_state {
+typedef struct __blake2b_state {
     uint64_t h[8];
     uint64_t t[2];
     uint64_t f[2];
     uint8_t buf[2 * BLAKE2B_BLOCKBYTES];
     size_t buflen;
     uint8_t last_node;
-} blake2b_state;
+    uint8_t padding[23];
+} blake2b_state
+#if defined(_MSC_VER)
+;
+__declspec(align(64)) struct __blake2b_state blake2b_state_aligned;
+#else
+__attribute__ ((aligned(64)));
+#endif
 
-ALIGN(64) typedef struct __blake2sp_state {
+typedef struct __blake2sp_state {
     blake2s_state S[8][1];
     blake2s_state R[1];
     uint8_t buf[8 * BLAKE2S_BLOCKBYTES];
     size_t buflen;
-} blake2sp_state;
+} blake2sp_state
+#if defined(_MSC_VER)
+;
+__declspec(align(64)) struct __blake2sp_state blake2sp_state_aligned;
+#else
+__attribute__ ((aligned(64)));
+#endif
 
-ALIGN(64) typedef struct __blake2bp_state {
+typedef struct __blake2bp_state {
     blake2b_state S[4][1];
     blake2b_state R[1];
     uint8_t buf[4 * BLAKE2B_BLOCKBYTES];
     size_t buflen;
-} blake2bp_state;
-#pragma pack(pop)
+} blake2bp_state
+#if defined(_MSC_VER)
+;
+__declspec(align(64)) struct __blake2bp_state blake2bp_state_aligned;
+#else
+__attribute__ ((aligned(64)));
+#endif
 
 // Streaming API
 int blake2s_init(blake2s_state *S, const uint8_t outlen);
@@ -163,4 +190,3 @@ static inline int blake2(uint8_t *out, const void *in, const void *key, const ui
 #endif
 
 #endif
-

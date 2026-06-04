@@ -13,6 +13,9 @@
 
 /* stuff common to all ecc implementations */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 #define BTC_EXT_PUB_MAGIC   (0x0488B21E)
 #define BTC_EXT_PRIV_MAGIC  (0x0488ADE4)
 
@@ -85,8 +88,8 @@ namespace fc { namespace ecc {
             ssl_bignum order;
             FC_ASSERT( EC_GROUP_get_order( group, order, ctx ) );
             private_key_secret bin;
-            FC_ASSERT( BN_num_bytes( order ) == bin.data_size() );
-            FC_ASSERT( BN_bn2bin( order, (unsigned char*) bin.data() ) == bin.data_size() );
+            FC_ASSERT( size_t(BN_num_bytes( order )) == bin.data_size() );
+            FC_ASSERT( size_t(BN_bn2bin( order, (unsigned char*) bin.data() )) == bin.data_size() );
             return bin;
         }
 
@@ -104,8 +107,8 @@ namespace fc { namespace ecc {
             FC_ASSERT( EC_GROUP_get_order( group, order, ctx ) );
             BN_rshift1( order, order );
             private_key_secret bin;
-            FC_ASSERT( BN_num_bytes( order ) == bin.data_size() );
-            FC_ASSERT( BN_bn2bin( order, (unsigned char*) bin.data() ) == bin.data_size() );
+            FC_ASSERT( size_t(BN_num_bytes( order )) == bin.data_size() );
+            FC_ASSERT( size_t(BN_bn2bin( order, (unsigned char*) bin.data() )) == bin.data_size() );
             return bin;
         }
 
@@ -269,7 +272,7 @@ namespace fc { namespace ecc {
         memcpy( dest, key.begin(), key.size() );
         return result;
     }
-    
+
     extended_public_key extended_public_key::deserialize( const extended_key_data& data )
     {
        return from_base58( _to_base58( data ) );
@@ -340,7 +343,7 @@ namespace fc { namespace ecc {
         memcpy( dest, key.data(), key.data_size() );
         return result;
     }
-    
+
     extended_private_key extended_private_key::deserialize( const extended_key_data& data )
     {
        return from_base58( _to_base58( data ) );
@@ -413,3 +416,5 @@ void from_variant( const variant& var,  ecc::public_key& vo )
 }
 
 }
+
+#pragma GCC diagnostic pop

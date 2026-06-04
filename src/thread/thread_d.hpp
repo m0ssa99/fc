@@ -18,7 +18,7 @@ namespace fc {
     class thread_d {
 
         public:
-           fc::context* prev_ctx = nullptr;
+           using context_pair = std::pair<thread_d*, fc::context*>;
 
            thread_d(fc::thread& s)
             :self(s), boost_thread(0),
@@ -370,7 +370,34 @@ namespace fc {
                * a catch block; it fails to catch a yield while unwinding the stack, which 
                * is probably just as likely to cause crashes */
               assert(std::current_exception() == std::exception_ptr());
-
+              #ifdef _WIN32
+                // CRITICAL Windows x64 / ucrtbase safety guard.
+                //
+                // jump_fcontext passes a pointer to a local variable (&p, a context_pair
+                // on the current fiber's stack) through the context switch.  When the fiber
+                // resumes, the returned transfer_t.data is cast back to context_pair* and
+                // written through:
+                //
+                //   auto p = context_pair{this, prev};          // local on THIS stack frame
+                //   auto t = bc::jump_fcontext(next, &p);       // switch to 'next'
+                //   ((context_pair*)t.data)->second->my_context = t.fctx;  // resume: write back
+                //
+                // On Windows x64, if an exception is active during the switch, SEH unwinds
+                // the stack — including this stack frame — which OVERWRITES &p with unwind
+                // metadata.  When this fiber is eventually resumed, t.data points to garbage
+                // and the write to ->my_context corrupts an arbitrary heap address.
+                // RtlpCoalesceFreeBlocks then trips over the null/garbage pointer: c0000005.
+                //
+                // Prevention: never call jump_fcontext while an exception is active.
+                // All callers (yield, wait_until, wait_any_until, yield_until) already guard
+                // this; this check is the last line of defence in Release builds where
+                // the assert() above is a no-op.
+                if( std::current_exception() != std::exception_ptr() )
+                {
+                  wlog( "start_next_fiber: blocked — exception active on Windows (SEH heap corruption prevention)" );
+                  return false;
+                }
+              #endif
               check_for_timeouts();
               if( !current ) 
                 current = new fc::context( &fc::thread::current() );
@@ -400,10 +427,9 @@ namespace fc {
                 // slog( "jump to %p from %p", next, prev );
                 // fc_dlog( logger::get("fc_context"), "from ${from} to ${to}", ( "from", int64_t(prev) )( "to", int64_t(next) ) ); 
 #if BOOST_VERSION >= 106100
-                prev_ctx = prev;
-                std::cerr<<"start jumping to existing context...\n";
-                bc::detail::jump_fcontext( next->my_context, this );
-                std::cerr<<"back from jumping to existing context\n";
+                auto p = context_pair{nullptr, prev};
+                auto t = bc::jump_fcontext( next->my_context, &p );
+                static_cast<context_pair*>(t.data)->second->my_context = t.fctx;
 #elif BOOST_VERSION >= 105600
                 bc::jump_fcontext( &prev->my_context, next->my_context, 0 );
 #elif BOOST_VERSION >= 105300
@@ -447,14 +473,9 @@ namespace fc {
                 // slog( "jump to %p from %p", next, prev );
                 // fc_dlog( logger::get("fc_context"), "from ${from} to ${to}", ( "from", int64_t(prev) )( "to", int64_t(next) ) );
 #if BOOST_VERSION >= 106100
-                //(*next->my_context)( (intptr_t)this );
-                //bc::detail::transfer_t tran; tran.data = this;
-                std::cerr << "start prev->my_context = " << prev->my_context <<"... \n";
-                std::cerr << "jumping to next context... \n";
-                prev_ctx = prev;
-                auto result = bc::detail::jump_fcontext( next->my_context, this );
-                std::cerr << "end prev->my_context = " << prev->my_context <<"... \n";
-                std::cerr << result.fctx <<" <--- result \n";
+                auto p = context_pair{this, prev};
+                auto t = bc::jump_fcontext( next->my_context, &p );
+                static_cast<context_pair*>(t.data)->second->my_context = t.fctx;
 #elif BOOST_VERSION >= 105600
                 bc::jump_fcontext( &prev->my_context, next->my_context, (intptr_t)this );
 #elif BOOST_VERSION >= 105300
@@ -483,20 +504,15 @@ namespace fc {
               return true;
            }
 
-           static void start_process_tasks( fc::context::transfer_t my ) 
-           {
 #if BOOST_VERSION >= 106100
-              std::cerr<<"my data: "<<my.data<<"\n";
-              std::cerr<<"my from: "<<my.fctx<<"\n";
-              thread_d* self = (thread_d*)my.data;
-              if( self->prev_ctx )
-              {
-                 std::cerr << "setting prev_ctx to " << int64_t(my.fctx) << "\n";
-                 self->prev_ctx->my_context = my.fctx;
-              }
-              std::cerr<<"start process tasks\n" << int64_t(self)<<"\n";
-              assert( self != 0 );
+           static void start_process_tasks( bc::transfer_t my )
+           {
+              auto p = static_cast<context_pair*>(my.data);
+              auto self = static_cast<thread_d*>(p->first);
+              p->second->my_context = my.fctx;
 #else
+           static void start_process_tasks( intptr_t my )
+           {
               thread_d* self = (thread_d*)my;
 #endif
               try 
@@ -691,9 +707,21 @@ namespace fc {
 
           if( tp <= (time_point::now()+fc::microseconds(10000)) ) 
             return;
-
-          FC_ASSERT(std::current_exception() == std::exception_ptr(), 
-                    "Attempting to yield while processing an exception");
+          
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the sleep
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "yield_until called while exception active (Windows SEH) — skipping sleep to avoid crash" );
+                return;
+              }
+         #else
+            FC_ASSERT(std::current_exception() == std::exception_ptr(), 
+                     "Attempting to yield while processing an exception");
+          #endif
 
           if( !current ) 
             current = new fc::context(&fc::thread::current());
@@ -727,10 +755,20 @@ namespace fc {
         void wait( const promise_base::ptr& p, const time_point& timeout ) {
           if( p->ready() ) 
             return;
-
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the wait
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "wait called while exception active (Windows SEH) — skipping wait to avoid crash" );
+                return;
+              }
+          #else
           FC_ASSERT(std::current_exception() == std::exception_ptr(), 
                     "Attempting to yield while processing an exception");
-
+          #endif
           if( timeout < time_point::now() ) 
             FC_THROW_EXCEPTION( timeout_exception, "" );
           

@@ -300,7 +300,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_HALF_BRIGHT 
+#define CONSOLE_HALF_BRIGHT
 
 /**
     @def CONSOLE_ITALIC
@@ -311,7 +311,7 @@
 
     (const char*)
 */
-#define CONSOLE_ITALIC 
+#define CONSOLE_ITALIC
 
 /**
     @def CONSOLE_UNDERLINE
@@ -329,7 +329,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_BLINK 
+#define CONSOLE_BLINK
 
 /**
     @def CONSOLE_RAPID_BLINK
@@ -337,7 +337,7 @@
 
     (const char*)
 */
-#define CONSOLE_RAPID_BLINK 
+#define CONSOLE_RAPID_BLINK
 
 /**
     @def CONSOLE_REVERSED
@@ -355,7 +355,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_CONCEALED 
+#define CONSOLE_CONCEALED
 
 /**
     @def CONSOLE_STRIKETHROUGH
@@ -364,7 +364,7 @@
     @ingroup tconsole
     (const char*)
 */
-#define CONSOLE_STRIKETHROUGH 
+#define CONSOLE_STRIKETHROUGH
 
 /// @}
 
@@ -534,7 +534,7 @@
 #define CONSOLE_ITALIC ""
 #define CONSOLE_UNDERLINE ""
 #define CONSOLE_BLINK ""
-#define CONSOLE_RAPID_BLINK "" 
+#define CONSOLE_RAPID_BLINK ""
 #define CONSOLE_REVERSED ""
 #define CONSOLE_CONCEALED ""
 #define CONSOLE_STRIKETHROUGH ""

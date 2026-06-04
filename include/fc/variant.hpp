@@ -131,11 +131,11 @@ namespace fc {
     template<typename K, typename T>
     void from_variant(const variant &var, std::unordered_map<K, T> &vo);
 
-    template<typename K, typename... T>
-    void to_variant(const fc::flat_map<K, T...> &var, variant &vo);
+    template<typename K, typename T, typename... A>
+    void to_variant(const fc::flat_map<K, T, A...> &var, variant &vo);
 
-    template<typename K, typename... T>
-    void from_variant(const variant &var, fc::flat_map<K, T...> &vo);
+    template<typename K, typename T, typename... A>
+    void from_variant(const variant &var, fc::flat_map<K, T, A...> &vo);
 
     template<typename T>
     void to_variant(const std::map<std::string, T> &var, variant &vo);
@@ -369,7 +369,7 @@ namespace fc {
         blob as_blob() const;
 
         /** Convert's double, ints, bools, etc to a std::string
-         * @throw if get_type() == array_type | get_type() == object_type 
+         * @throw if get_type() == array_type | get_type() == object_type
          */
         std::string as_string() const;
 
@@ -379,13 +379,13 @@ namespace fc {
         /// @throw if get_type() != array_type | null_type
         variants &get_array();
 
-        /// @throw if get_type() != array_type 
+        /// @throw if get_type() != array_type
         const variants &get_array() const;
 
         /// @throw if get_type() != object_type | null_type
         variant_object &get_object();
 
-        /// @throw if get_type() != object_type 
+        /// @throw if get_type() != object_type
         const variant_object &get_object() const;
 
         /// @pre is_object()
@@ -405,7 +405,7 @@ namespace fc {
          *  void from_variant( const Variant& var, T& val )
          *  </code>
          *
-         *  The above form is not always convienant, so the this templated 
+         *  The above form is not always convienant, so the this templated
          *  method is used to enable conversion from Variants to other
          *  types.
          */

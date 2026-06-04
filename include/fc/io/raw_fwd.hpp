@@ -105,11 +105,11 @@ namespace fc {
         template<typename Stream, typename K, typename V>
         inline void unpack(Stream &s, std::map<K, V> &value, uint32_t depth = 0);
 
-        template<typename Stream, typename K, typename... V>
-        inline void pack(Stream &s, const flat_map<K, V...> &value);
+        template<typename Stream, typename K, typename V, typename... A>
+        inline void pack(Stream &s, const flat_map<K, V, A...> &value);
 
         template<typename Stream, typename K, typename V, typename... A>
-        inline void unpack(Stream &s, flat_map<K, V, A...> &value, uint32_t depth = 0);
+        inline void unpack(Stream &s, flat_map<K, V, A...> &value, uint32_t depth);
 
         template<typename Stream, typename K, typename V>
         inline void pack(Stream &s, const std::pair<K, V> &value);

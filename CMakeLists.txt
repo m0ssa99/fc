@@ -25,6 +25,7 @@ set(DEFAULT_EXECUTABLE_INSTALL_DIR bin/)
 set(CMAKE_DEBUG_POSTFIX _debug)
 set(BUILD_SHARED_LIBS NO)
 set(ECC_IMPL secp256k1 CACHE STRING "secp256k1 or openssl or mixed")
+option(BUILD_FC_TESTS "Build fc test executables" ON)
 
 set(platformBitness 32)
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -34,7 +35,7 @@ endif()
 set(ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 
 set(BOOST_COMPONENTS)
-list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options signals serialization chrono unit_test_framework context locale iostreams)
+list(APPEND BOOST_COMPONENTS thread date_time system filesystem program_options serialization chrono unit_test_framework context locale iostreams)
 set(Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF")
 
 if(ECC_IMPL STREQUAL openssl)
@@ -53,17 +54,26 @@ if(MSVC)
     # autoconf won't work here, hard code the defines
     set(SECP256K1_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp")
 
-    file(GLOB SECP256K1_SOURCES "${SECP256K1_DIR}/src/secp256k1.c")
+    file(GLOB SECP256K1_SOURCES "${SECP256K1_DIR}/src/secp256k1.c"
+                                     "${SECP256K1_DIR}/src/precomputed_ecmult.c"
+                                     "${SECP256K1_DIR}/src/precomputed_ecmult_gen.c")
     add_library(secp256k1 ${SECP256K1_SOURCES})
 
     target_include_directories(secp256k1 PRIVATE "${SECP256K1_DIR}" PUBLIC "${SECP256K1_DIR}/include")
+
+    # Also define SECP256K1_NO_API_VISIBILITY_ATTRIBUTES for fc so it doesn't use __declspec(dllimport)
+    target_compile_definitions(secp256k1 INTERFACE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
 
     set(SECP256K1_BUILD_DEFINES
         USE_FIELD_10X26
         USE_FIELD_INV_BUILTIN
         USE_NUM_NONE
         USE_SCALAR_8X32
-        USE_SCALAR_INV_BUILTIN)
+        USE_SCALAR_INV_BUILTIN
+        ENABLE_MODULE_RECOVERY
+        ENABLE_MODULE_GENERATOR
+        ENABLE_MODULE_RANGEPROOF
+        SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
     set_target_properties(secp256k1 PROPERTIES COMPILE_DEFINITIONS "${SECP256K1_BUILD_DEFINES}" LINKER_LANGUAGE C)
 else(MSVC)
     include(ExternalProject)
@@ -71,7 +81,8 @@ else(MSVC)
         externalproject_add(project_secp256k1
                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
                             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-                            CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --host=x86_64-w64-mingw32
+                            BUILD_IN_SOURCE 1
+                            CONFIGURE_COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof --host=x86_64-w64-mingw32
                             BUILD_COMMAND make
                             INSTALL_COMMAND true
                             BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
@@ -80,7 +91,7 @@ else(MSVC)
         externalproject_add(project_secp256k1
                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
                             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-                            CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no
+                            CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof
                             BUILD_COMMAND make
                             INSTALL_COMMAND true
                             BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
@@ -112,14 +123,12 @@ if(WIN32)
     set(Boost_USE_MULTITHREADED ON)
     set(BOOST_ALL_DYN_LINK OFF) # force dynamic linking for all libraries
 
-    find_package(Boost 1.53 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
-    # For Boost 1.53 on windows, coroutine was not in BOOST_LIBRARYDIR and do not need it to build,  but if boost versin >= 1.54, find coroutine otherwise will cause link errors
-    if(NOT "${Boost_VERSION}" MATCHES "1.53(.*)")
-        set(BOOST_LIBRARIES_TEMP ${Boost_LIBRARIES})
-        find_package(Boost 1.54 REQUIRED COMPONENTS coroutine)
-        list(APPEND BOOST_COMPONENTS coroutine)
-        set(Boost_LIBRARIES ${BOOST_LIBRARIES_TEMP} ${Boost_LIBRARIES})
-    endif()
+    find_package(Boost 1.71 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+    # coroutine is always available in Boost >= 1.71
+    set(BOOST_LIBRARIES_TEMP ${Boost_LIBRARIES})
+    find_package(Boost 1.71 REQUIRED COMPONENTS coroutine)
+    list(APPEND BOOST_COMPONENTS coroutine)
+    set(Boost_LIBRARIES ${BOOST_LIBRARIES_TEMP} ${Boost_LIBRARIES})
 
     set(PLATFORM_SPECIFIC_LIBS wsock32.lib ws2_32.lib userenv.lib)
     # iphlpapi.lib
@@ -129,7 +138,7 @@ else(WIN32)
 
     list(APPEND BOOST_COMPONENTS coroutine)
 
-    find_package(Boost 1.53 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+    find_package(Boost 1.71 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a;.so")
 
@@ -156,6 +165,7 @@ option(UNITY_BUILD OFF)
 
 set(fc_sources
     src/uint128_t.cpp
+    src/uint128lh_t.cpp
     src/real128.cpp
     src/variant.cpp
     src/exception.cpp
@@ -171,6 +181,7 @@ set(fc_sources
     src/asio.cpp
     src/string.cpp
     src/shared_ptr.cpp
+    src/stacktrace.cpp
     src/time.cpp
     src/utf8.cpp
     src/io/iostream.cpp
@@ -182,7 +193,6 @@ set(fc_sources
     src/io/varint.cpp
     src/io/console.cpp
     src/filesystem.cpp
-    src/interprocess/process.cpp
     src/interprocess/signals.cpp
     src/interprocess/file_mapping.cpp
     src/interprocess/mmap_struct.cpp
@@ -217,7 +227,6 @@ set(fc_sources
     src/crypto/sha256.cpp
     src/crypto/sha224.cpp
     src/crypto/sha512.cpp
-    src/crypto/dh.cpp
     src/crypto/blowfish.cpp
     src/crypto/elliptic_common.cpp
     src/crypto/equihash.cpp
@@ -281,7 +290,7 @@ if(NOT CPP_STANDARD)
 endif()
 
 if(WIN32)
-    target_compile_definitions(fc PUBLIC WIN32 NOMINMAX _WIN32_WINNT=0x0501 _CRT_SECURE_NO_WARNINGS
+    target_compile_definitions(fc PUBLIC WIN32 NOMINMAX _WIN32_WINNT=0x0601 _CRT_SECURE_NO_WARNINGS
                                _SCL_SERCURE_NO_WARNINGS
                                # Needed to disable MSVC autolinking feature (#pragma comment)
                                BOOST_ALL_NO_LIB
@@ -293,7 +302,10 @@ if(WIN32)
     if(MSVC)
         # Activate C++ exception handling, assume extern C calls don't throw
         # Add /U options to be sure settings specific to dynamic boost link are ineffective
-        target_compile_options(fc PUBLIC /EHsc /UBOOST_ALL_DYN_LINK /UBOOST_LINKING_PYTHON /UBOOST_DEBUG_PYTHON)
+        # /EHa: enable async (SEH) exception handling — required for boost::context.
+        # boost::context uses asm context-switches that can raise SEH signals;
+        # /EHsc (sync-only) lets those escape destructors → silent heap corruption.
+        target_compile_options(fc PUBLIC /EHa /UBOOST_ALL_DYN_LINK /UBOOST_LINKING_PYTHON /UBOOST_DEBUG_PYTHON)
     elseif(MINGW)
         # Put MinGW specific compiler settings here
     endif()
@@ -301,12 +313,12 @@ else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wall")
 
     if(APPLE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_STANDARD} -stdlib=libc++ -Wall -Wno-unused-local-typedef")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_STANDARD} -stdlib=libc++ -Wall")
     else()
         if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
             target_compile_options(fc PUBLIC ${CPP_STANDARD} -Wall -fnon-call-exceptions)
         endif()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_STANDARD} -Wall -fnon-call-exceptions -Wno-unused-local-typedef")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CPP_STANDARD} -Wall -fnon-call-exceptions")
     endif()
 endif()
 
@@ -340,7 +352,7 @@ endif(BZIP2_FOUND)
 # This will become unnecessary once we update to websocketpp which fixes upstream issue #395
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWEBSOCKETPP_STRICT_MASKING")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO -DBOOST_BIND_GLOBAL_PLACEHOLDERS")
 
 option(LOG_LONG_API "Log long API calls over websocket (ON OR OFF)" ON)
 message(STATUS "LOG_LONG_API: ${LOG_LONG_API}")
@@ -365,7 +377,6 @@ target_include_directories(fc
                            "${readline_includes}"
 
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                           ${CMAKE_CURRENT_SOURCE_DIR}/vendor/boost_1.51/include
                            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cyoencode-1.0.2/src
                            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
                            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/equihash
@@ -375,7 +386,7 @@ target_include_directories(fc
 if(NOT WIN32)
     set(LINK_USR_LOCAL_LIB -L/usr/local/lib)
 endif()
-target_link_libraries(fc PUBLIC ${LINK_USR_LOCAL_LIB} equihash ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES} ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${rt_library} ${readline_libraries} ${ECC_LIB})
+target_link_libraries(fc PUBLIC ${LINK_USR_LOCAL_LIB} equihash ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES} ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${rt_library} ${readline_libraries} ${ECC_LIB} ${pthread_library})
 
 if(MSVC)
     set_source_files_properties(src/network/http/websocket.cpp PROPERTIES COMPILE_FLAGS "/bigobj")
@@ -393,7 +404,9 @@ endif()
 include_directories(vendor/websocketpp)
 include_directories(vendor/equihash)
 
-add_subdirectory(tests)
+if(BUILD_FC_TESTS)
+    add_subdirectory(tests)
+endif()
 
 if(WIN32)
     # add addtional import library on windows platform

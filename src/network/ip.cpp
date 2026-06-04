@@ -25,6 +25,10 @@ namespace fc {
             return uint32_t(a) != uint32_t(b);
         }
 
+        bool operator<(const address &a, const address &b) {
+            return uint32_t(a) < uint32_t(b);
+        }
+
         address &address::operator=(const std::string &s) {
             try {
                 _ip = boost::asio::ip::address_v4::from_string(s.c_str()).to_ulong();

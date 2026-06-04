@@ -65,8 +65,11 @@
 #endif
 
 #if !defined(HAVE_SSE2)
+#if defined(_M_X64) || defined(_M_IX86_FP)
+#define HAVE_SSE2
+#else
 #error "This code requires at least SSE2."
 #endif
-
 #endif
 
+#endif

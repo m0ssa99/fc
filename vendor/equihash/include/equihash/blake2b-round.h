@@ -23,7 +23,11 @@
 #define TOF(reg) _mm_castsi128_ps((reg))
 #define TOI(reg) _mm_castps_si128((reg))
 
+#if defined(_MSC_VER)
+#define LIKELY(x) (x)
+#else
 #define LIKELY(x) __builtin_expect((x),1)
+#endif
 
 
 /* Microarchitecture-specific macros */
@@ -36,7 +40,7 @@
     : (-(c) == 63) ? _mm_xor_si128(_mm_srli_epi64((x), -(c)), _mm_add_epi64((x), (x)))  \
     : _mm_xor_si128(_mm_srli_epi64((x), -(c)), _mm_slli_epi64((x), 64-(-(c))))
 #else
-#define _mm_roti_epi64(r, c) _mm_xor_si128(_mm_srli_epi64( (r), -(c) ),_mm_slli_epi64( (r), 64-(-c) ))
+#define _mm_roti_epi64(r, c) _mm_xor_si128(_mm_srli_epi64( (r), -(c) ),_mm_slli_epi64( (r), 64+(c) ))
 #endif
 #else
 /* ... */

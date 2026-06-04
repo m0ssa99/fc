@@ -9,12 +9,14 @@
 
 #include <atomic>
 #include <array>
+#include <deque>
+#include <algorithm>
 
 namespace fc
 {
   namespace detail {
 
-  class ntp_impl 
+  class ntp_impl
   {
     public:
       /** vector < host, port >  */
@@ -32,18 +34,40 @@ namespace fc
 
       fc::future<void>                                 _request_time_task_done;
 
+      bool                                               _valid_reply_received_this_cycle = false;
+      fc::time_point                                       _last_request_sent_time;
+
+      size_t                                           _delta_history_max_size;
+      std::deque<int64_t>                              _delta_history;
+      uint32_t                                         _round_trip_threshold_us;
+      uint32_t                                         _rejection_threshold_pct;
+      uint32_t                                         _rejection_min_threshold_us;
+
+      // Step detection: accept clock jumps when multiple consecutive
+      // NTP readings are rejected but agree with each other.
+      uint32_t                                         _consecutive_rejections = 0;
+      int64_t                                          _last_rejected_delta = 0;
+      static constexpr uint32_t                        _step_accept_threshold = 3;
+      static constexpr int64_t                         _step_consistency_us = 50000; // 50ms
+
       ntp_impl() :
       _ntp_thread("ntp"),
-      _request_interval_sec( 60*60 /* 1 hr */),
+      _request_interval_sec( 15*60 /* 15 min */),
       _retry_failed_request_interval_sec(60 * 5),
-      _last_ntp_delta_microseconds(0)
-      { 
+      _last_ntp_delta_microseconds(0),
+      _delta_history_max_size(5),
+      _round_trip_threshold_us(150000),
+      _rejection_threshold_pct(50),
+      _rejection_min_threshold_us(5000)
+      {
         _last_ntp_delta_initialized = false;
-        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org",123 ) );
-      } 
+        _ntp_hosts.push_back( std::make_pair( "pool.ntp.org", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.google.com", 123 ) );
+        _ntp_hosts.push_back( std::make_pair( "time.cloudflare.com", 123 ) );
+      }
 
-      ~ntp_impl() 
-      { 
+      ~ntp_impl()
+      {
       }
 
       fc::time_point ntp_timestamp_to_fc_time_point(uint64_t ntp_timestamp_net_order)
@@ -70,9 +94,17 @@ namespace fc
       void request_now()
       {
         assert(_ntp_thread.is_current());
-        for( auto item : _ntp_hosts )
+        // Rate-limit: don't re-send if we already sent a request within the last 3 seconds
+        // This prevents a feedback loop where stale replies each trigger new requests
+        auto now = fc::time_point::now();
+        if( now - _last_request_sent_time < fc::seconds(3) )
+          return;
+        _last_request_sent_time = now;
+        _valid_reply_received_this_cycle = false;
+        for( size_t i = 0; i < _ntp_hosts.size(); )
         {
-          try 
+          auto& item = _ntp_hosts[i];
+          try
           {
             //wlog( "resolving... ${r}", ("r", item) );
             auto eps = resolve( item.first, item.second );
@@ -84,10 +116,21 @@ namespace fc
               memcpy(send_buffer.get(), packet_to_send.data(), packet_to_send.size());
               uint64_t* send_buf_as_64_array = (uint64_t*)send_buffer.get();
               send_buf_as_64_array[5] = fc_time_point_to_ntp_timestamp(fc::time_point::now()); // 5 = Transmit Timestamp
-              _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              // Guard: read_loop error recovery may have closed the socket
+              // between the time this request_now was scheduled (via
+              // ntp::request_now → async().wait()) and when it actually
+              // executes on the ntp_thread.  Re-open if necessary so we
+              // don't hit "send_to: Bad file descriptor".
+              try {
+                _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              } catch (const fc::exception&) {
+                _sock.open();
+                _sock.send_to(send_buffer, packet_to_send.size(), ep);
+              }
               break;
             }
-          } 
+            ++i;
+          }
           catch (const fc::canceled_exception&)
           {
             throw;
@@ -95,23 +138,50 @@ namespace fc
           // this could fail to resolve but we want to go on to other hosts..
           catch ( const fc::exception& e )
           {
-            elog( "${e}", ("e",e.to_detail_string() ) ); 
+            std::string detail = e.to_detail_string();
+            if( detail.find("Host not found") != std::string::npos ||
+                detail.find("asio.netdb") != std::string::npos )
+            {
+              wlog( "\033[38;5;208mNTP server ${host}:${port} is unreachable (host not found), removing from list\033[0m",
+                    ("host", item.first)("port", item.second) );
+              _ntp_hosts.erase( _ntp_hosts.begin() + i );
+            }
+            else
+            {
+              elog( "${e}", ("e", detail ) );
+              ++i;
+            }
+          }
+          catch (...)
+          {
+            // Safety net: non-fc exceptions (e.g. boost::system::system_error
+            // from a closed socket) must not escape to the async caller, as
+            // that would crash the node when update_ntp_time()'s
+            // async().wait() rethrows.
+            ++i;
           }
         }
       } // request_now
 
       // started for first time in ntp() constructor, canceled in ~ntp() destructor
       // this task gets invoked every _retry_failed_request_interval_sec (currently 5 min), and if
-      // _request_interval_sec (currently 1 hour) has passed since the last successful update, 
+      // _request_interval_sec (currently 1 hour) has passed since the last successful update,
       // it sends a new request
       void request_time_task()
       {
         assert(_ntp_thread.is_current());
+        // Check if NTP hasn't been updated for too long
+        if (_last_ntp_delta_initialized) {
+          auto time_since_last_update = fc::time_point::now() - _last_valid_ntp_reply_received_time;
+          if (time_since_last_update > fc::seconds(_request_interval_sec * 2)) {
+            wlog("\033[94mNTP has not been updated for ${sec} seconds\033[0m", ("sec", time_since_last_update.count() / 1000000));
+          }
+        }
         if (_last_valid_ntp_reply_received_time <= fc::time_point::now() - fc::seconds(_request_interval_sec - 5))
           request_now();
         if (!_request_time_task_done.valid() || !_request_time_task_done.canceled())
-          _request_time_task_done = schedule( [=](){ request_time_task(); }, 
-                                              fc::time_point::now() + fc::seconds(_retry_failed_request_interval_sec), 
+          _request_time_task_done = schedule( [=](){ request_time_task(); },
+                                              fc::time_point::now() + fc::seconds(_retry_failed_request_interval_sec),
                                               "request_time_task" );
       } // request_loop
 
@@ -133,7 +203,7 @@ namespace fc
         {
           // if you start the read while loop here, the recieve_from call will throw "invalid argument" on win32,
           // so instead we start the loop after making our first request
-          try 
+          try
           {
             _sock.open();
             request_time_task(); //this will re-send a time request
@@ -160,8 +230,8 @@ namespace fc
               //     ("origin_time", origin_time)("server_receive_time", server_receive_time)("server_transmit_time", server_transmit_time)("receive_time", receive_time));
               // wlog("ntp offset: ${offset}, round_trip_delay ${delay}", ("offset", offset)("delay", round_trip_delay));
 
-              //if the reply we just received has occurred more than a second after our last time request (it was more than a second ago since our last request)
-              if( round_trip_delay > fc::microseconds(300000) )
+              //if the reply we just received has occurred more than the configured threshold after our last time request
+              if( round_trip_delay > fc::microseconds(_round_trip_threshold_us) )
               {
                 wlog("received stale ntp reply requested at ${request_time}, send a new time request", ("request_time", origin_time));
                 request_now(); //request another reply and ignore this one
@@ -170,14 +240,80 @@ namespace fc
               {
                 if( offset < fc::seconds(60*60*24) && offset > fc::seconds(-60*60*24) )
                 {
-                  _last_ntp_delta_microseconds = offset.count();
-                  _last_ntp_delta_initialized = true;
-                  fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
-                  _last_valid_ntp_reply_received_time = receive_time;
-                  wlog("ntp_delta_time updated to ${delta_time} us", ("delta_time",ntp_delta_time) );
+                  if( _valid_reply_received_this_cycle )
+                  {
+                    wlog("Ignoring additional NTP reply from ${endpoint} for this request cycle", ("endpoint", from));
+                    continue;
+                  }
+                  int64_t new_delta = offset.count();
+
+                  // Reject offsets that deviate too much from the moving average
+                  bool should_accept = true;
+                  if (_delta_history.size() >= 2) {
+                    int64_t sum = 0;
+                    for (int64_t d : _delta_history)
+                      sum += d;
+                    int64_t moving_avg = sum / static_cast<int64_t>(_delta_history.size());
+                    int64_t deviation = std::abs(new_delta - moving_avg);
+                    // Threshold: configured pct of |moving_avg|, with a configured minimum
+                    int64_t threshold = std::max(std::abs(moving_avg) * static_cast<int64_t>(_rejection_threshold_pct) / 100, static_cast<int64_t>(_rejection_min_threshold_us));
+                    if (deviation > threshold) {
+                      // Step detection: if consecutive rejected readings are
+                      // consistent with each other, accept a clock step.
+                      bool consistent_with_prev = (_consecutive_rejections > 0) &&
+                          (std::abs(new_delta - _last_rejected_delta) <= _step_consistency_us);
+                      if (consistent_with_prev || _consecutive_rejections == 0) {
+                        _consecutive_rejections++;
+                      } else {
+                        // New direction — restart count
+                        _consecutive_rejections = 1;
+                      }
+                      _last_rejected_delta = new_delta;
+
+                      if (_consecutive_rejections >= _step_accept_threshold) {
+                        // Clock step confirmed: multiple consistent readings agree
+                        wlog("\033[93mNTP clock step detected: accepting new offset ${new} us "
+                             "(was ${avg} us, ${n} consistent readings)\033[0m",
+                             ("new", new_delta)("avg", moving_avg)("n", _consecutive_rejections));
+                        _delta_history.clear();
+                        _consecutive_rejections = 0;
+                        // Fall through to accept path below
+                      } else {
+                        wlog("\033[91mNTP delta rejected: ${new} us deviates ${dev} us from moving average ${avg} us "
+                             "(threshold ${thresh} us, step ${step}/${need})\033[0m",
+                             ("new", new_delta)("dev", deviation)("avg", moving_avg)
+                             ("thresh", threshold)("step", _consecutive_rejections)("need", _step_accept_threshold));
+                        should_accept = false;
+                      }
+                    } else {
+                      // Accepted normally — reset step detection state
+                      _consecutive_rejections = 0;
+                    }
+                  }
+
+                  if (should_accept) {
+                    _valid_reply_received_this_cycle = true;
+                    // Update moving average history
+                    _delta_history.push_back(new_delta);
+                    if (_delta_history.size() > _delta_history_max_size)
+                      _delta_history.pop_front();
+
+                    // Compute smoothed delta as moving average
+                    int64_t sum = 0;
+                    for (int64_t d : _delta_history)
+                      sum += d;
+                    int64_t smoothed_delta = sum / static_cast<int64_t>(_delta_history.size());
+
+                    _last_ntp_delta_microseconds = smoothed_delta;
+                    _last_ntp_delta_initialized = true;
+                    fc::microseconds ntp_delta_time = fc::microseconds(_last_ntp_delta_microseconds);
+                    _last_valid_ntp_reply_received_time = receive_time;
+                    wlog("\033[94mntp_delta_time updated to ${delta_time} us (raw: ${raw} us, avg of ${count} samples)\033[0m",
+                         ("delta_time", ntp_delta_time)("raw", new_delta)("count", _delta_history.size()));
+                  }
                 }
                 else
-                  elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}", 
+                  elog( "NTP time and local time vary by more than a day! ntp:${ntp_time} local:${local}",
                        ("ntp_time", receive_time + offset)("local", fc::time_point::now()) );
               }
             }
@@ -228,11 +364,11 @@ namespace fc
       {
         wlog( "Exception thrown while shutting down NTP's request_time_task, ignoring" );
       }
-      
-      try 
+
+      try
       {
         my->_read_loop_done.cancel_and_wait("ntp object is destructing");
-      } 
+      }
       catch ( const fc::exception& e )
       {
         wlog( "Exception thrown while shutting down NTP's read_loop, ignoring: ${e}", ("e",e) );
@@ -255,6 +391,40 @@ namespace fc
   {
     my->_request_interval_sec = interval_sec;
     my->_retry_failed_request_interval_sec = std::min(my->_retry_failed_request_interval_sec, interval_sec);
+  }
+
+  void ntp::set_retry_interval( uint32_t interval_sec )
+  {
+    my->_retry_failed_request_interval_sec = interval_sec;
+  }
+
+  void ntp::set_servers( const std::vector<std::pair<std::string, uint16_t>>& servers )
+  {
+    my->_ntp_thread.async( [this, servers](){
+      my->_ntp_hosts.clear();
+      for( const auto& s : servers )
+        my->_ntp_hosts.push_back( s );
+    }, "set_servers" ).wait();
+  }
+
+  void ntp::set_round_trip_threshold_ms( uint32_t ms )
+  {
+    my->_round_trip_threshold_us = ms * 1000;
+  }
+
+  void ntp::set_delta_history_size( size_t size )
+  {
+    my->_delta_history_max_size = size > 0 ? size : 1;
+  }
+
+  void ntp::set_rejection_threshold_pct( uint32_t pct )
+  {
+    my->_rejection_threshold_pct = pct;
+  }
+
+  void ntp::set_rejection_min_threshold_ms( uint32_t ms )
+  {
+    my->_rejection_min_threshold_us = ms * 1000;
   }
 
   void ntp::request_now()

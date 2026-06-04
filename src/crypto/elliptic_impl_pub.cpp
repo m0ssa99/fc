@@ -3,6 +3,9 @@
 
 #include "_elliptic_impl_pub.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 /* used by mixed + openssl */
 
 namespace fc { namespace ecc {
@@ -356,3 +359,4 @@ namespace fc { namespace ecc {
         FC_THROW_EXCEPTION( exception, "unable to reconstruct public key from signature" );
     }
 }}
+#pragma GCC diagnostic pop

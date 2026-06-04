@@ -20,6 +20,17 @@ namespace fc {
         static std::function<R(Args...)> functor( P&& p, R (C::*mem_func)(Args...)const );
     };
 
+    // Helper to extract function signature from member function pointer (MSVC-friendly)
+    template<typename T>
+    struct mfn_signature;
+    template<typename R, typename C, typename... Args>
+    struct mfn_signature<R(C::*)(Args...)> { using type = std::function<R(Args...)>; };
+    template<typename R, typename C, typename... Args>
+    struct mfn_signature<R(C::*)(Args...)const> { using type = std::function<R(Args...)>; };
+
+    template<typename T>
+    using mfn_signature_t = typename mfn_signature<T>::type;
+
     template< typename Interface, typename Transform  >
     struct vtable  : public std::enable_shared_from_this<vtable<Interface,Transform>>
     { private: vtable(); };
@@ -109,7 +120,7 @@ namespace fc {
 #include <boost/preprocessor/stringize.hpp>
 
 #define FC_API_VTABLE_DEFINE_MEMBER( r, data, elem ) \
-      decltype(Transform::functor( (data*)nullptr, &data::elem)) elem;
+      mfn_signature_t<decltype(&data::elem)> elem;
 #define FC_API_VTABLE_DEFINE_VISIT_OTHER( r, data, elem ) \
         { typedef typename Visitor::other_type OtherType; \
         v( BOOST_PP_STRINGIZE(elem), elem, &OtherType::elem ); }
@@ -130,5 +141,4 @@ namespace fc { \
         BOOST_PP_SEQ_FOR_EACH( FC_API_VTABLE_DEFINE_VISIT, CLASS, METHODS ) \
       } \
   }; \
-}  
-
+}

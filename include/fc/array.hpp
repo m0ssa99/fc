@@ -182,7 +182,7 @@ namespace fc {
         if (ve.size()) {
             memcpy(&bi, ve.data(), fc::min<size_t>(ve.size(), sizeof(bi)));
         } else {
-            memset(&bi, char(0), sizeof(bi));
+            bi = array<T, N>();
         }
     }
 
@@ -208,4 +208,3 @@ namespace std {
         }
     };
 }
-

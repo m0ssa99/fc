@@ -1,7 +1,7 @@
 #include <fc/crypto/hex.hpp>
 #include <fc/crypto/hmac.hpp>
 #include <fc/fwd_impl.hpp>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <cstring>
 #include <fc/crypto/sha224.hpp>
 #include <fc/variant.hpp>
@@ -31,7 +31,11 @@ namespace fc {
 
 
     struct sha224::encoder::impl {
-        SHA256_CTX ctx;
+        EVP_MD_CTX* ctx;
+        impl() : ctx(EVP_MD_CTX_new()) {}
+        ~impl() { EVP_MD_CTX_free(ctx); }
+        impl(const impl&) = delete;
+        impl& operator=(const impl&) = delete;
     };
 
     sha224::encoder::~encoder() {
@@ -52,17 +56,18 @@ namespace fc {
     }
 
     void sha224::encoder::write(const char *d, uint32_t dlen) {
-        SHA224_Update(&my->ctx, d, dlen);
+        EVP_DigestUpdate(my->ctx, d, dlen);
     }
 
     sha224 sha224::encoder::result() {
         sha224 h;
-        SHA224_Final((uint8_t *) h.data(), &my->ctx);
+        unsigned int md_len = 0;
+        EVP_DigestFinal_ex(my->ctx, (unsigned char *) h.data(), &md_len);
         return h;
     }
 
     void sha224::encoder::reset() {
-        SHA224_Init(&my->ctx);
+        EVP_DigestInit_ex(my->ctx, EVP_sha224(), nullptr);
     }
 
     sha224 operator<<(const sha224 &h1, uint32_t i) {
@@ -108,7 +113,7 @@ namespace fc {
         if (ve.size()) {
             memcpy(&bi, ve.data(), fc::min<size_t>(ve.size(), sizeof(bi)));
         } else {
-            memset(&bi, char(0), sizeof(bi));
+            bi = sha224();
         }
     }
 

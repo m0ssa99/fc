@@ -1,6 +1,6 @@
 #include <fc/crypto/hex.hpp>
 #include <fc/fwd_impl.hpp>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <cstring>
 #include <fc/crypto/sha1.hpp>
 #include <fc/variant.hpp>
@@ -31,7 +31,11 @@ namespace fc {
 
 
     struct sha1::encoder::impl {
-        SHA_CTX ctx;
+        EVP_MD_CTX* ctx;
+        impl() : ctx(EVP_MD_CTX_new()) {}
+        ~impl() { EVP_MD_CTX_free(ctx); }
+        impl(const impl&) = delete;
+        impl& operator=(const impl&) = delete;
     };
 
     sha1::encoder::~encoder() {
@@ -52,17 +56,18 @@ namespace fc {
     }
 
     void sha1::encoder::write(const char *d, uint32_t dlen) {
-        SHA1_Update(&my->ctx, d, dlen);
+        EVP_DigestUpdate(my->ctx, d, dlen);
     }
 
     sha1 sha1::encoder::result() {
         sha1 h;
-        SHA1_Final((uint8_t *) h.data(), &my->ctx);
+        unsigned int md_len = 0;
+        EVP_DigestFinal_ex(my->ctx, (unsigned char *) h.data(), &md_len);
         return h;
     }
 
     void sha1::encoder::reset() {
-        SHA1_Init(&my->ctx);
+        EVP_DigestInit_ex(my->ctx, EVP_sha1(), nullptr);
     }
 
     sha1 operator<<(const sha1 &h1, uint32_t i) {
@@ -110,7 +115,7 @@ namespace fc {
         if (ve.size()) {
             memcpy(&bi, ve.data(), fc::min<size_t>(ve.size(), sizeof(bi)));
         } else {
-            memset(&bi, char(0), sizeof(bi));
+            bi = sha1();
         }
     }
 
