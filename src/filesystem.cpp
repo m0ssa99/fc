@@ -259,7 +259,11 @@ namespace fc {
     }
 
     int recursive_directory_iterator::level() {
+#if BOOST_VERSION >= 108200
+        return _p->depth();
+#else
         return _p->level();
+#endif
     }
 
     bool operator==(const recursive_directory_iterator &r, const recursive_directory_iterator &l) {
