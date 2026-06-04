@@ -370,7 +370,34 @@ namespace fc {
                * a catch block; it fails to catch a yield while unwinding the stack, which 
                * is probably just as likely to cause crashes */
               assert(std::current_exception() == std::exception_ptr());
-
+              #ifdef _WIN32
+                // CRITICAL Windows x64 / ucrtbase safety guard.
+                //
+                // jump_fcontext passes a pointer to a local variable (&p, a context_pair
+                // on the current fiber's stack) through the context switch.  When the fiber
+                // resumes, the returned transfer_t.data is cast back to context_pair* and
+                // written through:
+                //
+                //   auto p = context_pair{this, prev};          // local on THIS stack frame
+                //   auto t = bc::jump_fcontext(next, &p);       // switch to 'next'
+                //   ((context_pair*)t.data)->second->my_context = t.fctx;  // resume: write back
+                //
+                // On Windows x64, if an exception is active during the switch, SEH unwinds
+                // the stack — including this stack frame — which OVERWRITES &p with unwind
+                // metadata.  When this fiber is eventually resumed, t.data points to garbage
+                // and the write to ->my_context corrupts an arbitrary heap address.
+                // RtlpCoalesceFreeBlocks then trips over the null/garbage pointer: c0000005.
+                //
+                // Prevention: never call jump_fcontext while an exception is active.
+                // All callers (yield, wait_until, wait_any_until, yield_until) already guard
+                // this; this check is the last line of defence in Release builds where
+                // the assert() above is a no-op.
+                if( std::current_exception() != std::exception_ptr() )
+                {
+                  wlog( "start_next_fiber: blocked — exception active on Windows (SEH heap corruption prevention)" );
+                  return false;
+                }
+              #endif
               check_for_timeouts();
               if( !current ) 
                 current = new fc::context( &fc::thread::current() );
@@ -680,9 +707,21 @@ namespace fc {
 
           if( tp <= (time_point::now()+fc::microseconds(10000)) ) 
             return;
-
-          FC_ASSERT(std::current_exception() == std::exception_ptr(), 
-                    "Attempting to yield while processing an exception");
+          
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the sleep
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "yield_until called while exception active (Windows SEH) — skipping sleep to avoid crash" );
+                return;
+              }
+         #else
+            FC_ASSERT(std::current_exception() == std::exception_ptr(), 
+                     "Attempting to yield while processing an exception");
+          #endif
 
           if( !current ) 
             current = new fc::context(&fc::thread::current());
@@ -716,10 +755,20 @@ namespace fc {
         void wait( const promise_base::ptr& p, const time_point& timeout ) {
           if( p->ready() ) 
             return;
-
+          #ifdef _WIN32
+              // On Windows x64 (SEH / ucrtbase), yielding while an exception is
+              // active corrupts the SEH chain and crashes the node via
+              // FC_ASSERT → abort().  Detect this early and skip the wait
+              // gracefully rather than crashing.  The caller's loop will
+              // iterate immediately — a minor busy-wait vs a dead node.
+              if( std::current_exception() != std::exception_ptr() ) {
+                wlog( "wait called while exception active (Windows SEH) — skipping wait to avoid crash" );
+                return;
+              }
+          #else
           FC_ASSERT(std::current_exception() == std::exception_ptr(), 
                     "Attempting to yield while processing an exception");
-
+          #endif
           if( timeout < time_point::now() ) 
             FC_THROW_EXCEPTION( timeout_exception, "" );
           

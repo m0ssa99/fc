@@ -283,7 +283,7 @@ namespace fc {
 
         /// @pre valid()
         bool ready() const {
-            return m_prom->ready();
+            return m_prom && m_prom->ready();
         }
 
         /// @pre valid()
@@ -379,16 +379,18 @@ namespace fc {
         }
 
         void cancel_and_wait(const char *reason FC_CANCELATION_REASON_DEFAULT_ARG) {
-            cancel(reason);
+             if (valid()) {
+                cancel(reason);
             try {
                 wait();
             } catch (const canceled_exception &) {
             }
         }
+        }
 
         /// @pre valid()
         bool ready() const {
-            return m_prom->ready();
+            return m_prom && m_prom->ready();
         }
 
         /// @pre valid()

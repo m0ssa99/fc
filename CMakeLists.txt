@@ -81,7 +81,8 @@ else(MSVC)
         externalproject_add(project_secp256k1
                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
                             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-                            CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof --host=x86_64-w64-mingw32
+                            BUILD_IN_SOURCE 1
+                            CONFIGURE_COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof --host=x86_64-w64-mingw32
                             BUILD_COMMAND make
                             INSTALL_COMMAND true
                             BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
@@ -289,7 +290,7 @@ if(NOT CPP_STANDARD)
 endif()
 
 if(WIN32)
-    target_compile_definitions(fc PUBLIC WIN32 NOMINMAX _WIN32_WINNT=0x0501 _CRT_SECURE_NO_WARNINGS
+    target_compile_definitions(fc PUBLIC WIN32 NOMINMAX _WIN32_WINNT=0x0601 _CRT_SECURE_NO_WARNINGS
                                _SCL_SERCURE_NO_WARNINGS
                                # Needed to disable MSVC autolinking feature (#pragma comment)
                                BOOST_ALL_NO_LIB
@@ -301,7 +302,10 @@ if(WIN32)
     if(MSVC)
         # Activate C++ exception handling, assume extern C calls don't throw
         # Add /U options to be sure settings specific to dynamic boost link are ineffective
-        target_compile_options(fc PUBLIC /EHsc /UBOOST_ALL_DYN_LINK /UBOOST_LINKING_PYTHON /UBOOST_DEBUG_PYTHON)
+        # /EHa: enable async (SEH) exception handling — required for boost::context.
+        # boost::context uses asm context-switches that can raise SEH signals;
+        # /EHsc (sync-only) lets those escape destructors → silent heap corruption.
+        target_compile_options(fc PUBLIC /EHa /UBOOST_ALL_DYN_LINK /UBOOST_LINKING_PYTHON /UBOOST_DEBUG_PYTHON)
     elseif(MINGW)
         # Put MinGW specific compiler settings here
     endif()
