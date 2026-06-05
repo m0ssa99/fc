@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <type_traits>
 #include <utility>
 #include <fc/signals.hpp>
 //#include <fc/rpc/json_connection.hpp>
@@ -144,14 +145,16 @@ namespace fc {
             return f();
          }
 
-         template<typename R, typename Signature, typename ... Args>
+         template<typename R, typename Signature, typename ... Args,
+                  typename std::enable_if<std::is_function<Signature>::value, int>::type = 0>
          R call_generic( const std::function<R(std::function<Signature>,Args...)>& f, variants::const_iterator a0, variants::const_iterator e )
          {
             FC_ASSERT( a0 != e, "too few arguments passed to method" );
             detail::callback_functor<Signature> arg0( get_connection(), a0->as<uint64_t>() );
             return  call_generic<R,Args...>( this->bind_first_arg<R,std::function<Signature>,Args...>( f, std::function<Signature>(arg0) ), a0+1, e );
          }
-         template<typename R, typename Signature, typename ... Args>
+         template<typename R, typename Signature, typename ... Args,
+                  typename std::enable_if<std::is_function<Signature>::value, int>::type = 0>
          R call_generic( const std::function<R(const std::function<Signature>&,Args...)>& f, variants::const_iterator a0, variants::const_iterator e )
          {
             FC_ASSERT( a0 != e, "too few arguments passed to method" );
