@@ -78,6 +78,8 @@ if(MSVC)
 else(MSVC)
     include(ExternalProject)
     if(MINGW)
+        # BUILD_IN_SOURCE 1 means the library is produced in the source directory
+        set(_secp256k1_lib_dir "${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp")
         externalproject_add(project_secp256k1
                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
                             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
@@ -85,16 +87,18 @@ else(MSVC)
                             CONFIGURE_COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof --host=x86_64-w64-mingw32
                             BUILD_COMMAND make
                             INSTALL_COMMAND true
-                            BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
+                            BUILD_BYPRODUCTS ${_secp256k1_lib_dir}/.libs/libsecp256k1.a
                             )
     else(MINGW)
+        # Out-of-source build: library is produced in the build directory
+        set(_secp256k1_lib_dir "${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build")
         externalproject_add(project_secp256k1
                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
                             SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
                             CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof
                             BUILD_COMMAND make
                             INSTALL_COMMAND true
-                            BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
+                            BUILD_BYPRODUCTS ${_secp256k1_lib_dir}/.libs/libsecp256k1.a
                             )
     endif(MINGW)
     externalproject_add_step(project_secp256k1 autogen
@@ -103,10 +107,8 @@ else(MSVC)
                              DEPENDERS configure
                              )
 
-    externalproject_get_property(project_secp256k1 binary_dir)
-
     add_library(secp256k1 STATIC IMPORTED)
-    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${binary_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${_secp256k1_lib_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET secp256k1 PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/include)
     add_dependencies(secp256k1 project_secp256k1)
 endif(MSVC)
