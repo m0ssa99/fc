@@ -68,9 +68,8 @@ if(MSVC OR MINGW)
     # ENABLE_MODULE_* activates the required zkp modules
     # Wide-mul implementation (int128 vs int64) is auto-detected by util.h
     target_compile_definitions(secp256k1
-        PRIVATE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES
-        INTERFACE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES SECP256K1_STATIC
-                  ENABLE_MODULE_RECOVERY ENABLE_MODULE_GENERATOR ENABLE_MODULE_RANGEPROOF)
+        PUBLIC SECP256K1_NO_API_VISIBILITY_ATTRIBUTES SECP256K1_STATIC
+               ENABLE_MODULE_RECOVERY ENABLE_MODULE_GENERATOR ENABLE_MODULE_RANGEPROOF)
     set_target_properties(secp256k1 PROPERTIES LINKER_LANGUAGE C)
 else()
     include(ExternalProject)
