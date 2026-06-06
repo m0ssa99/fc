@@ -50,57 +50,40 @@ else(ECC_IMPL STREQUAL openssl)
 endif(ECC_IMPL STREQUAL openssl)
 
 # Configure secp256k1-zkp
-if(MSVC)
-    # autoconf won't work here, hard code the defines
+if(MSVC OR MINGW)
+    # Compile secp256k1-zkp directly as a CMake library on Windows.
+    # autotools (autogen.sh / configure / make) is unreliable in Windows CI
+    # due to missing or incompatible sh/autoreconf tooling.
     set(SECP256K1_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp")
 
-    file(GLOB SECP256K1_SOURCES "${SECP256K1_DIR}/src/secp256k1.c"
-                                     "${SECP256K1_DIR}/src/precomputed_ecmult.c"
-                                     "${SECP256K1_DIR}/src/precomputed_ecmult_gen.c")
-    add_library(secp256k1 ${SECP256K1_SOURCES})
+    add_library(secp256k1
+        "${SECP256K1_DIR}/src/secp256k1.c"
+        "${SECP256K1_DIR}/src/precomputed_ecmult.c"
+        "${SECP256K1_DIR}/src/precomputed_ecmult_gen.c")
 
     target_include_directories(secp256k1 PRIVATE "${SECP256K1_DIR}" PUBLIC "${SECP256K1_DIR}/include")
 
-    # Also define SECP256K1_NO_API_VISIBILITY_ATTRIBUTES for fc so it doesn't use __declspec(dllimport)
-    target_compile_definitions(secp256k1 INTERFACE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
-
-    set(SECP256K1_BUILD_DEFINES
-        USE_FIELD_10X26
-        USE_FIELD_INV_BUILTIN
-        USE_NUM_NONE
-        USE_SCALAR_8X32
-        USE_SCALAR_INV_BUILTIN
-        ENABLE_MODULE_RECOVERY
-        ENABLE_MODULE_GENERATOR
-        ENABLE_MODULE_RANGEPROOF
-        SECP256K1_NO_API_VISIBILITY_ATTRIBUTES)
-    set_target_properties(secp256k1 PROPERTIES COMPILE_DEFINITIONS "${SECP256K1_BUILD_DEFINES}" LINKER_LANGUAGE C)
-else(MSVC)
+    # SECP256K1_NO_API_VISIBILITY_ATTRIBUTES disables __declspec(dllimport/dllexport)
+    # SECP256K1_STATIC tells the header this is a static library (no DLL import)
+    # ENABLE_MODULE_* activates the required zkp modules
+    # Wide-mul implementation (int128 vs int64) is auto-detected by util.h
+    target_compile_definitions(secp256k1
+        PRIVATE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES
+        INTERFACE SECP256K1_NO_API_VISIBILITY_ATTRIBUTES SECP256K1_STATIC
+                  ENABLE_MODULE_RECOVERY ENABLE_MODULE_GENERATOR ENABLE_MODULE_RANGEPROOF)
+    set_target_properties(secp256k1 PROPERTIES LINKER_LANGUAGE C)
+else()
     include(ExternalProject)
-    if(MINGW)
-        # BUILD_IN_SOURCE 1 means the library is produced in the source directory
-        set(_secp256k1_lib_dir "${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp")
-        externalproject_add(project_secp256k1
-                            PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
-                            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-                            BUILD_IN_SOURCE 1
-                            CONFIGURE_COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof --host=x86_64-w64-mingw32
-                            BUILD_COMMAND make
-                            INSTALL_COMMAND true
-                            BUILD_BYPRODUCTS ${_secp256k1_lib_dir}/.libs/libsecp256k1.a
-                            )
-    else(MINGW)
-        # Out-of-source build: library is produced in the build directory
-        set(_secp256k1_lib_dir "${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build")
-        externalproject_add(project_secp256k1
-                            PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
-                            SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-                            CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof
-                            BUILD_COMMAND make
-                            INSTALL_COMMAND true
-                            BUILD_BYPRODUCTS ${_secp256k1_lib_dir}/.libs/libsecp256k1.a
-                            )
-    endif(MINGW)
+    # Out-of-source build: library is produced in the build directory
+    set(_secp256k1_lib_dir "${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build")
+    externalproject_add(project_secp256k1
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
+                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
+                        CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-tests=no --enable-benchmark=no --enable-module-recovery --enable-experimental --enable-module-generator --enable-module-rangeproof
+                        BUILD_COMMAND make
+                        INSTALL_COMMAND true
+                        BUILD_BYPRODUCTS ${_secp256k1_lib_dir}/.libs/libsecp256k1.a
+                        )
     externalproject_add_step(project_secp256k1 autogen
                              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
                              COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/autogen.sh
@@ -111,7 +94,7 @@ else(MSVC)
     set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${_secp256k1_lib_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET secp256k1 PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/include)
     add_dependencies(secp256k1 project_secp256k1)
-endif(MSVC)
+endif()
 # End configure secp256k1-zkp
 
 if(WIN32)
