@@ -53,6 +53,21 @@ namespace fc {
            my->console_handle = GetStdHandle(STD_ERROR_HANDLE);
          else if (my->cfg.stream = stream::std_out)
            my->console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+         // Enable ANSI escape sequence processing so inline color codes
+         // (e.g. "\033[92m") embedded in log messages render as colors instead
+         // of leaking as literal "←[92m" text. Supported on Windows 10 (1511+);
+         // on older systems / redirected (non-console) handles GetConsoleMode
+         // fails and we leave the mode unchanged.
+         #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+         #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+         #endif
+         if (my->console_handle != INVALID_HANDLE_VALUE) {
+            DWORD console_mode = 0;
+            if (GetConsoleMode(my->console_handle, &console_mode))
+               SetConsoleMode(my->console_handle,
+                              console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+         }
 #endif
 
          for( int i = 0; i < log_level::off+1; ++i )
